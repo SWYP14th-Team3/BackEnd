@@ -1,3 +1,7 @@
+#  application.yml
+#   ├── 공통 설정 -> active설정에 따라 DB접속이 로컬이냐 운영이냐 바뀜 현재는 local
+#   ├── local(로컬) 설정
+#   └── prod(운영) 설정
 spring:
   profiles:
     active: local

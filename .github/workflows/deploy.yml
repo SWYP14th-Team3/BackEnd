@@ -14,10 +14,10 @@ jobs:
         uses: actions/checkout@v4
 
       # 2. 자바 17 환경 셋업
-      - name: Set up JDK 17
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '25'
           distribution: 'temurin'
 
       # 3. Gradle 빌드 전 실행 권한 부여
@@ -27,6 +27,8 @@ jobs:
       # 4. Spring Boot 앱을 도커 이미지로 빌드 (테스트는 일단 제외)
       - name: Build Spring Boot Docker Image
         run: ./gradlew bootBuildImage --imageName=resufit-app:latest
+        env:
+          BP_JVM_VERSION: 25
 
       # 5. 빌드된 앱 이미지를 파일(.tar)로 압축 가공
       - name: Save Docker Image to Tar
@@ -69,5 +71,5 @@ jobs:
           SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
           SLACK_TITLE: ${{ job.status == 'success' && '🚀 ResuFit 배포 성공' || '❌ ResuFit 배포 실패' }}
           SLACK_MESSAGE: |
-            **커밋 메시지:** ${{ github.event.head_commit.message }}
+            *커밋 메시지:* ${{ github.event.head_commit.message }}
             로그인 후 확인창: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

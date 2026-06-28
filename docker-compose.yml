@@ -5,8 +5,7 @@ services:
     image: mysql:8.0
     container_name: resufit-mysql
     env_file:
-      - path: ${ENV_FILE:-.env.local}
-        required: false
+      - .env.prod
     ports:
       - "3307:3306"
     environment:

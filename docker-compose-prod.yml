@@ -1,8 +1,6 @@
 services:
   resufit-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: resufit-app:latest
     container_name: resufit-app
     env_file:
       - .env.prod  # 배포용 환경 변수 파일 지정

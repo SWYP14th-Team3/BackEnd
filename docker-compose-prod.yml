@@ -1,20 +1,36 @@
 services:
+  resufit-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: resufit-app
+    env_file:
+      - .env.prod  # 배포용 환경 변수 파일 지정
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   mysql:
     image: mysql:8.0
     container_name: resufit-mysql
     env_file:
       - .env.prod
     ports:
-      - "3307:3306"
+      - "3307:3306" # 외부 툴 접속용 포트 개방 유지
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-1234}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-resume}
       TZ: Asia/Seoul
     volumes:
-      - mysql-data:/var/lib/mysql
+      - mysql-prod-data:/var/lib/mysql
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$$$MYSQL_PASSWORD --silent"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -28,7 +44,7 @@ services:
       - "6379:6379"
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
-      - redis-data:/data
+      - redis-prod-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -37,5 +53,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  mysql-data:
-  redis-data:
+  mysql-prod-data:
+  redis-prod-data:

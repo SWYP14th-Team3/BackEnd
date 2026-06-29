@@ -41,7 +41,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "resufit-app.tar,docker-compose.yml"
+          source: "resufit-app.tar,docker-compose-prod.yml"
           target: "/home/ubuntu/app"
 
       # 7. 서버 배포 실행
@@ -53,10 +53,10 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu/app
-            docker-compose down
+            docker-compose -f docker-compose.yml down
             docker load -i resufit-app.tar
             rm resufit-app.tar
-            ENV_FILE=.env.prod docker-compose up -d
+            docker-compose -f docker-compose-prod.yml up -d
 
       # 8. 슬랙 알림 (존재하는 채널명 확인 필수)
       - name: Slack Notification

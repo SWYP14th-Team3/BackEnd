@@ -1,13 +1,17 @@
-#  application.yml
-#   ├── 공통 설정 -> active설정에 따라 DB접속이 로컬이냐 운영이냐 바뀜 현재는 local
-#   ├── local(로컬) 설정
-#   └── prod(운영) 설정
 spring:
   profiles:
-    active: local
+    active: ${SPRING_PROFILES_ACTIVE:local}
 
   application:
-    name: BackEnd
+    name: ResuFit
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
 
 ---
 spring:
@@ -18,7 +22,7 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3307/resume?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: root
-    password: 1234
+    password: '1234'
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -28,7 +32,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.MySQLDialect
+
 
   mvc:
     pathmatch:
@@ -39,7 +43,7 @@ server:
 
 logging:
   level:
-    com.backend: DEBUG
+    com.resufit: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE
 
@@ -50,9 +54,9 @@ spring:
       on-profile: prod
 
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    url: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-resume}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: ${MYSQL_USER:-resufit}
+    password: ${MYSQL_PASSWORD:-resufit1234}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -65,4 +69,4 @@ server:
 
 logging:
   level:
-    com.backend: INFO
+    com.resufit: INFO

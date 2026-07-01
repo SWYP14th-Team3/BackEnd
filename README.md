@@ -72,18 +72,6 @@ gradlew.bat bootRun
 http://localhost:8080
 ```
 
-Swagger UI는 다음 주소에서 확인할 수 있습니다.
-
-```text
-http://localhost:8080/swagger-ui.html
-```
-
-OpenAPI JSON 문서는 다음 주소에서 확인할 수 있습니다.
-
-```text
-http://localhost:8080/v3/api-docs
-```
-
 ### 4. MySQL 종료
 
 ```bash

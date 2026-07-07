@@ -6,8 +6,8 @@ import lombok.NoArgsConstructor;
 
 @Getter
 @NoArgsConstructor
-public class SocialLoginRequest {
+public class TokenReissueRequest {
 
-    @NotBlank(message = "인가 코드는 필수입니다.")
-    private String authorizationCode;
+    @NotBlank(message = "Refresh Token은 필수입니다.")
+    private String refreshToken;
 }

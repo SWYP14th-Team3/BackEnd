@@ -13,6 +13,22 @@ springdoc:
     operations-sorter: method
     tags-sorter: alpha
 
+# JWT 공통 설정
+# secret은 env.local / env.prod에서 주입
+jwt:
+  secret: ${JWT_SECRET:TBPDhjuISK47hECb28vUpImQQsRPPwP68RsJmt/8B/o=}
+  access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:1800000}      # 30분
+  refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:1209600000} # 14일
+
+# OAuth 공통 endpoint
+oauth:
+  google:
+    token-uri: https://oauth2.googleapis.com/token
+    user-info-uri: https://openidconnect.googleapis.com/v1/userinfo
+  kakao:
+    token-uri: https://kauth.kakao.com/oauth/token
+    user-info-uri: https://kapi.kakao.com/v2/user/me
+
 ---
 spring:
   config:
@@ -33,6 +49,10 @@ spring:
       hibernate:
         format_sql: true
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
   mvc:
     pathmatch:
@@ -43,9 +63,19 @@ server:
 
 logging:
   level:
-    com.resufit: DEBUG
+    com.backend: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE
+
+oauth:
+  google:
+    client-id: ${GOOGLE_CLIENT_ID}
+    client-secret: ${GOOGLE_CLIENT_SECRET}
+    redirect-uri: ${GOOGLE_REDIRECT_URI}
+  kakao:
+    client-id: ${KAKAO_CLIENT_ID}
+    client-secret: ${KAKAO_CLIENT_SECRET:}
+    redirect-uri: ${KAKAO_REDIRECT_URI}
 
 ---
 spring:
@@ -54,9 +84,9 @@ spring:
       on-profile: prod
 
   datasource:
-    url: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-resume}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: ${MYSQL_USER:-resufit}
-    password: ${MYSQL_PASSWORD:-resufit1234}
+    url: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:resume}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: ${MYSQL_USER:resufit}
+    password: ${MYSQL_PASSWORD:resufit1234}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -64,9 +94,25 @@ spring:
       ddl-auto: validate
     show-sql: false
 
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+
 server:
   port: 8080
 
 logging:
   level:
-    com.resufit: INFO
+    com.backend: INFO
+    org.hibernate.SQL: INFO
+
+oauth:
+  google:
+    client-id: ${GOOGLE_CLIENT_ID}
+    client-secret: ${GOOGLE_CLIENT_SECRET}
+    redirect-uri: ${GOOGLE_REDIRECT_URI}
+  kakao:
+    client-id: ${KAKAO_CLIENT_ID}
+    client-secret: ${KAKAO_CLIENT_SECRET:}
+    redirect-uri: ${KAKAO_REDIRECT_URI}

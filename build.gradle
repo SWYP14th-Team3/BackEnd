@@ -11,7 +11,7 @@ description = 'BackEnd'
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
@@ -41,6 +41,9 @@ dependencies {
     testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testAnnotationProcessor 'org.projectlombok:lombok'
+
+    // HTML 파싱
+    implementation 'org.jsoup:jsoup:1.22.2'
 }
 
 tasks.named('test') {

@@ -34,7 +34,7 @@ jobs:
           docker build -t resufit-app:latest .
           docker save -o resufit-app.tar resufit-app:latest
 
-      # 6. EC2의 Nginx 설정 경로 준비
+            # 6. EC2의 Nginx 설정 경로 준비
       - name: Prepare Nginx Directory on EC2
         uses: appleboy/ssh-action@master
         with:
@@ -42,11 +42,16 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            mkdir -p /home/ubuntu/app/nginx/conf.d
+            set -e
 
-            if [ -d /home/ubuntu/app/nginx/conf.d/default.conf ]; then
-              rm -rf /home/ubuntu/app/nginx/conf.d/default.conf
-            fi
+            sudo mkdir -p /home/ubuntu/app/nginx/conf.d
+
+            sudo rm -rf /home/ubuntu/app/nginx/conf.d/default.conf
+
+            sudo chown -R $USER:$USER /home/ubuntu/app/nginx
+
+            chmod 755 /home/ubuntu/app/nginx
+            chmod 755 /home/ubuntu/app/nginx/conf.d
 
       # 7. Docker 이미지와 배포 설정 파일 전송
       - name: Transfer Files to EC2

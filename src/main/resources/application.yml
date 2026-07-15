@@ -91,7 +91,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update # https 테스트 중에만 update 운영 시 validate
     show-sql: false
 
   data:

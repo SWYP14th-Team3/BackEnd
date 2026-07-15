@@ -3,7 +3,7 @@ services:
     image: resufit-app:latest
     container_name: resufit-app
     env_file:
-      - .env.prod  # 배포용 환경 변수 파일 지정
+      - .env.prod
     ports:
       - "8080:8080"
     depends_on:
@@ -13,22 +13,47 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  nginx:
+    image: nginx:alpine
+    container_name: resufit-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot-www:/var/www/certbot:ro
+      - certbot-conf:/etc/letsencrypt:ro
+    depends_on:
+      - resufit-app
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: resufit-certbot
+    volumes:
+      - certbot-www:/var/www/certbot
+      - certbot-conf:/etc/letsencrypt
+    profiles:
+      - certbot
+
   mysql:
     image: mysql:8.0
     container_name: resufit-mysql
     env_file:
       - .env.prod
     ports:
-      - "3307:3306" # 외부 툴 접속용 포트 개방 유지
+      - "3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-1234}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-resume}
       TZ: Asia/Seoul
     volumes:
       - mysql-prod-data:/var/lib/mysql
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$$$MYSQL_PASSWORD --silent"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -40,7 +65,10 @@ services:
     container_name: resufit-redis
     ports:
       - "6379:6379"
-    command: ["redis-server", "--appendonly", "yes"]
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
     volumes:
       - redis-prod-data:/data
     healthcheck:
@@ -53,3 +81,7 @@ services:
 volumes:
   mysql-prod-data:
   redis-prod-data:
+  certbot-www:
+    name: resufit-certbot-www
+  certbot-conf:
+    name: resufit-certbot-conf

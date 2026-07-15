@@ -19,7 +19,12 @@ public class OpenApiConfig {
                         .description("ResuFit backend API documentation")
                         .version("v1"))
                 .servers(List.of(
-                        new Server().url("http://localhost:8080").description("Local server")
+                        new Server()
+                                .url("https://api.resufit.site")
+                                .description("Production server"),
+                        new Server()
+                                .url("http://localhost:8080")
+                                .description("Local server")
                 ));
     }
 }

@@ -34,7 +34,7 @@ jobs:
           docker build -t resufit-app:latest .
           docker save -o resufit-app.tar resufit-app:latest
 
-            # 6. EC2의 Nginx 설정 경로 준비
+      # 6. EC2의 Nginx 설정 경로 준비
       - name: Prepare Nginx Directory on EC2
         uses: appleboy/ssh-action@master
         with:
@@ -46,7 +46,9 @@ jobs:
 
             sudo mkdir -p /home/ubuntu/app/nginx/conf.d
 
-            sudo rm -rf /home/ubuntu/app/nginx/conf.d/default.conf
+            if [ -d /home/ubuntu/app/nginx/conf.d/default.conf ]; then
+              sudo rm -rf /home/ubuntu/app/nginx/conf.d/default.conf
+            fi
 
             sudo chown -R $USER:$USER /home/ubuntu/app/nginx
 
@@ -80,15 +82,78 @@ jobs:
             rm -f resufit-app.tar
 
             docker compose -f docker-compose-prod.yml up -d \
-              --force-recreate \
               --remove-orphans
 
             docker compose -f docker-compose-prod.yml ps
 
             docker exec resufit-nginx nginx -t
+            docker exec resufit-nginx nginx -s reload
 
-            curl --fail --silent --show-error \
+            DOCKER_BIN="$(command -v docker)"
+
+            sudo tee /usr/local/bin/resufit-certbot-renew > /dev/null <<EOF
+            #!/bin/sh
+            set -eu
+
+            sleep "\$(awk 'BEGIN{srand(); print int(rand()*3600)}')"
+
+            cd /home/ubuntu/app
+
+            $DOCKER_BIN compose \
+              -f docker-compose-prod.yml \
+              --profile certbot \
+              run --rm certbot renew --quiet
+
+            $DOCKER_BIN exec resufit-nginx nginx -s reload
+            EOF
+
+            sudo chmod 755 /usr/local/bin/resufit-certbot-renew
+
+            sudo tee /etc/cron.d/resufit-certbot-renew > /dev/null <<'EOF'
+            0 0,12 * * * ubuntu /usr/local/bin/resufit-certbot-renew >> /home/ubuntu/app/certbot-renew.log 2>&1
+            EOF
+
+            sudo chmod 644 /etc/cron.d/resufit-certbot-renew
+            sudo systemctl reload cron || true
+
+            ATTEMPT=1
+            MAX_ATTEMPTS=30
+
+            until curl \
+              --fail \
+              --silent \
+              --show-error \
+              https://api.resufit.site/health
+            do
+              if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
+                echo "Spring Boot health check failed."
+
+                docker logs resufit-app --tail 200
+                docker logs resufit-nginx --tail 100
+
+                exit 1
+              fi
+
+              echo "Waiting for Spring Boot... ($ATTEMPT/$MAX_ATTEMPTS)"
+
+              ATTEMPT=$((ATTEMPT + 1))
+              sleep 5
+            done
+
+            curl \
+              --fail \
+              --silent \
+              --show-error \
               http://localhost/nginx-health
+
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              https://api.resufit.site/v3/api-docs \
+              > /dev/null
+
+            echo "Deployment verification completed."
 
       # 9. Slack 배포 결과 알림
       - name: Slack Notification

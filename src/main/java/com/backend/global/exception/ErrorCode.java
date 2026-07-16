@@ -26,7 +26,11 @@ public enum ErrorCode {
 
     // User
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
-    ALREADY_REGISTERED_EMAIL(HttpStatus.BAD_REQUEST, "이미 가입된 이메일입니다.");
+    ALREADY_REGISTERED_EMAIL(HttpStatus.BAD_REQUEST, "이미 가입된 이메일입니다."),
+
+    // Analysis
+    ANALYSIS_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "분석 결과를 찾을 수 없습니다."),
+    ANALYSIS_RESULT_FORBIDDEN(HttpStatus.FORBIDDEN, "해당 분석 결과를 수정할 권한이 없습니다.");
 
     private final HttpStatus httpStatus;
     private final String message;

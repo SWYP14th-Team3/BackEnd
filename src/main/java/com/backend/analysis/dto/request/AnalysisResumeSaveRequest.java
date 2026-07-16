@@ -8,6 +8,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class AnalysisResumeSaveRequest {
 
-    @NotBlank(message = "저장할 이력서 텍스트는 필수입니다.")
+    @NotBlank(message = "resumeCurrentText는 필수입니다.")
     private String resumeCurrentText;
 }

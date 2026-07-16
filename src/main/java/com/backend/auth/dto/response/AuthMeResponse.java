@@ -9,14 +9,14 @@ import lombok.Getter;
 @Builder
 public class AuthMeResponse {
 
-    private Long userId;
+    private Long id;
     private String email;
     private String name;
     private Provider provider;
 
     public static AuthMeResponse from(User user) {
         return AuthMeResponse.builder()
-                .userId(user.getId())
+                .id(user.getId())
                 .email(user.getEmail())
                 .name(user.getName())
                 .provider(user.getProvider())

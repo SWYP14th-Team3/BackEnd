@@ -60,7 +60,12 @@ public class SecurityConfig {
                                 "/api/auth/logout"
                         ).authenticated()
 
-                        // 이후 분석 API 붙일 때 authenticated()로 전환 가능
+                        // Analysis
+                        .requestMatchers(
+                                "/api/analyses",
+                                "/api/analyses/**"
+                        ).authenticated()
+
                         .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

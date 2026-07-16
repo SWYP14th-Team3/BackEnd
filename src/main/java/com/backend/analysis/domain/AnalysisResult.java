@@ -112,4 +112,9 @@ public class AnalysisResult extends BaseTimeEntity {
         this.retryCount = 0;
         this.satisfaction = null;
     }
+
+    public void updateResumeCurrentText(String resumeCurrentText, LocalDateTime savedAt) {
+        this.resumeCurrentText = resumeCurrentText;
+        this.lastSavedAt = savedAt;
+    }
 }

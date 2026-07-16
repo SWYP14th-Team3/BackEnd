@@ -1,7 +1,6 @@
 package com.backend.analysis.dto.request;
 
-import com.backend.analysis.domain.Satisfaction;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -9,6 +8,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class AnalysisSatisfactionRequest {
 
-    @NotNull(message = "만족도 값은 필수입니다.")
-    private Satisfaction satisfaction;
+    @NotBlank(message = "satisfaction 값이 올바르지 않습니다.")
+    private String satisfaction;
 }

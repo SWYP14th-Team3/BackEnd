@@ -11,6 +11,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -65,12 +66,14 @@ public class GoogleOAuthClient implements OAuthClient {
             OAuthTokenResponse tokenResponse = response.getBody();
 
             if (tokenResponse == null || tokenResponse.getAccessToken() == null) {
-                throw new CustomException(ErrorCode.OAUTH_TOKEN_REQUEST_FAILED);
+                throw new CustomException(ErrorCode.OAUTH_SERVER_ERROR);
             }
 
             return tokenResponse;
+        } catch (HttpStatusCodeException e) {
+            throw new CustomException(ErrorCode.OAUTH_AUTHENTICATION_FAILED);
         } catch (RestClientException e) {
-            throw new CustomException(ErrorCode.OAUTH_TOKEN_REQUEST_FAILED);
+            throw new CustomException(ErrorCode.OAUTH_SERVER_ERROR);
         }
     }
 
@@ -92,12 +95,14 @@ public class GoogleOAuthClient implements OAuthClient {
             GoogleUserInfoResponse userInfoResponse = response.getBody();
 
             if (userInfoResponse == null || userInfoResponse.getSub() == null) {
-                throw new CustomException(ErrorCode.OAUTH_USER_INFO_REQUEST_FAILED);
+                throw new CustomException(ErrorCode.OAUTH_SERVER_ERROR);
             }
 
             return userInfoResponse;
+        } catch (HttpStatusCodeException e) {
+            throw new CustomException(ErrorCode.OAUTH_AUTHENTICATION_FAILED);
         } catch (RestClientException e) {
-            throw new CustomException(ErrorCode.OAUTH_USER_INFO_REQUEST_FAILED);
+            throw new CustomException(ErrorCode.OAUTH_SERVER_ERROR);
         }
     }
 }

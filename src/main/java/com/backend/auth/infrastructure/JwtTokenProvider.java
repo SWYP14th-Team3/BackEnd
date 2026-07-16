@@ -82,7 +82,15 @@ public class JwtTokenProvider {
     }
 
     public void validateRefreshToken(String token) {
-        validateToken(token);
+        try {
+            validateToken(token);
+        } catch (CustomException e) {
+            if (e.getErrorCode() == ErrorCode.EXPIRED_TOKEN
+                    || e.getErrorCode() == ErrorCode.INVALID_TOKEN) {
+                throw new CustomException(ErrorCode.INVALID_REFRESH_TOKEN);
+            }
+            throw e;
+        }
 
         if (!TokenType.REFRESH.name().equals(getTokenType(token))) {
             throw new CustomException(ErrorCode.INVALID_REFRESH_TOKEN);

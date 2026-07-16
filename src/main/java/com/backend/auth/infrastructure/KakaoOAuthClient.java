@@ -7,13 +7,21 @@ import com.backend.global.exception.CustomException;
 import com.backend.global.exception.ErrorCode;
 import com.backend.user.domain.Provider;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.*;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class KakaoOAuthClient implements OAuthClient {
@@ -30,8 +38,11 @@ public class KakaoOAuthClient implements OAuthClient {
     public SocialUserInfo getUserInfo(String authorizationCode) {
         OAuthProperties.OAuth kakao = oAuthProperties.getKakao();
 
-        OAuthTokenResponse tokenResponse = requestAccessToken(kakao, authorizationCode);
-        KakaoUserInfoResponse userInfoResponse = requestUserInfo(kakao, tokenResponse.getAccessToken());
+        OAuthTokenResponse tokenResponse =
+                requestAccessToken(kakao, authorizationCode);
+
+        KakaoUserInfoResponse userInfoResponse =
+                requestUserInfo(kakao, tokenResponse.getAccessToken());
 
         return SocialUserInfo.builder()
                 .provider(Provider.KAKAO)
@@ -54,26 +65,58 @@ public class KakaoOAuthClient implements OAuthClient {
         body.add("redirect_uri", kakao.getRedirectUri());
         body.add("code", authorizationCode);
 
-        if (kakao.getClientSecret() != null && !kakao.getClientSecret().isBlank()) {
+        if (StringUtils.hasText(kakao.getClientSecret())) {
             body.add("client_secret", kakao.getClientSecret());
         }
 
+        log.info(
+                "Kakao Access Token 요청: redirectUri={}, clientSecretConfigured={}",
+                kakao.getRedirectUri(),
+                StringUtils.hasText(kakao.getClientSecret())
+        );
+
         try {
-            ResponseEntity<OAuthTokenResponse> response = restTemplate.postForEntity(
-                    kakao.getTokenUri(),
-                    new HttpEntity<>(body, headers),
-                    OAuthTokenResponse.class
-            );
+            ResponseEntity<OAuthTokenResponse> response =
+                    restTemplate.postForEntity(
+                            kakao.getTokenUri(),
+                            new HttpEntity<>(body, headers),
+                            OAuthTokenResponse.class
+                    );
 
             OAuthTokenResponse tokenResponse = response.getBody();
 
-            if (tokenResponse == null || tokenResponse.getAccessToken() == null) {
-                throw new CustomException(ErrorCode.OAUTH_TOKEN_REQUEST_FAILED);
+            if (tokenResponse == null
+                    || !StringUtils.hasText(tokenResponse.getAccessToken())) {
+                log.error(
+                        "Kakao Access Token 응답 본문이 올바르지 않습니다. status={}",
+                        response.getStatusCode()
+                );
+
+                throw new CustomException(
+                        ErrorCode.OAUTH_SERVER_ERROR
+                );
             }
 
             return tokenResponse;
+        } catch (HttpStatusCodeException e) {
+            log.error(
+                    "Kakao Access Token 발급 실패: status={}, response={}",
+                    e.getStatusCode(),
+                    e.getResponseBodyAsString()
+            );
+
+            throw new CustomException(
+                    ErrorCode.OAUTH_AUTHENTICATION_FAILED
+            );
         } catch (RestClientException e) {
-            throw new CustomException(ErrorCode.OAUTH_TOKEN_REQUEST_FAILED);
+            log.error(
+                    "Kakao Access Token 요청 중 통신 오류가 발생했습니다.",
+                    e
+            );
+
+            throw new CustomException(
+                    ErrorCode.OAUTH_SERVER_ERROR
+            );
         }
     }
 
@@ -85,22 +128,48 @@ public class KakaoOAuthClient implements OAuthClient {
         headers.setBearerAuth(accessToken);
 
         try {
-            ResponseEntity<KakaoUserInfoResponse> response = restTemplate.exchange(
-                    kakao.getUserInfoUri(),
-                    HttpMethod.GET,
-                    new HttpEntity<>(headers),
-                    KakaoUserInfoResponse.class
-            );
+            ResponseEntity<KakaoUserInfoResponse> response =
+                    restTemplate.exchange(
+                            kakao.getUserInfoUri(),
+                            HttpMethod.GET,
+                            new HttpEntity<>(headers),
+                            KakaoUserInfoResponse.class
+                    );
 
             KakaoUserInfoResponse userInfoResponse = response.getBody();
 
-            if (userInfoResponse == null || userInfoResponse.getId() == null) {
-                throw new CustomException(ErrorCode.OAUTH_USER_INFO_REQUEST_FAILED);
+            if (userInfoResponse == null
+                    || userInfoResponse.getId() == null) {
+                log.error(
+                        "Kakao 사용자 정보 응답 본문이 올바르지 않습니다. status={}",
+                        response.getStatusCode()
+                );
+
+                throw new CustomException(
+                        ErrorCode.OAUTH_SERVER_ERROR
+                );
             }
 
             return userInfoResponse;
+        } catch (HttpStatusCodeException e) {
+            log.error(
+                    "Kakao 사용자 정보 조회 실패: status={}, response={}",
+                    e.getStatusCode(),
+                    e.getResponseBodyAsString()
+            );
+
+            throw new CustomException(
+                    ErrorCode.OAUTH_AUTHENTICATION_FAILED
+            );
         } catch (RestClientException e) {
-            throw new CustomException(ErrorCode.OAUTH_USER_INFO_REQUEST_FAILED);
+            log.error(
+                    "Kakao 사용자 정보 요청 중 통신 오류가 발생했습니다.",
+                    e
+            );
+
+            throw new CustomException(
+                    ErrorCode.OAUTH_SERVER_ERROR
+            );
         }
     }
 }

@@ -23,7 +23,7 @@ public class User extends BaseCreatedTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 100)
+    @Column(length = 100)
     private String email;
 
     @Enumerated(EnumType.STRING)
@@ -33,7 +33,7 @@ public class User extends BaseCreatedTimeEntity {
     @Column(name = "provider_id", nullable = false, length = 100)
     private String providerId;
 
-    @Column(nullable = false, length = 50)
+    @Column(length = 50)
     private String name;
 
     @Builder

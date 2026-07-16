@@ -1,5 +1,6 @@
 package com.backend.auth.application;
 
+import com.backend.auth.dto.response.AuthMeResponse;
 import com.backend.auth.dto.response.LoginResponse;
 import com.backend.auth.dto.response.SocialUserInfo;
 import com.backend.auth.infrastructure.JwtTokenProvider;
@@ -13,7 +14,8 @@ import com.backend.user.infrastructure.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.backend.auth.dto.response.AuthMeResponse;
+import org.springframework.util.StringUtils;
+
 import java.util.List;
 
 @Service
@@ -40,11 +42,7 @@ public class AuthService {
                 jwtTokenProvider.getRefreshTokenExpiration()
         );
 
-        return LoginResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .tokenType("Bearer")
-                .build();
+        return LoginResponse.of(accessToken, refreshToken, user);
     }
 
     private SocialUserInfo getSocialUserInfo(Provider provider, String authorizationCode) {
@@ -65,7 +63,8 @@ public class AuthService {
     }
 
     private User createNewUser(SocialUserInfo socialUserInfo) {
-        if (userRepository.existsByEmail(socialUserInfo.getEmail())) {
+        if (StringUtils.hasText(socialUserInfo.getEmail())
+                && userRepository.existsByEmail(socialUserInfo.getEmail())) {
             throw new CustomException(ErrorCode.ALREADY_REGISTERED_EMAIL);
         }
 
@@ -88,7 +87,21 @@ public class AuthService {
     }
 
     @Transactional
-    public void logout(Long userId) {
+    public void logout(Long userId, String refreshToken) {
+        jwtTokenProvider.validateRefreshToken(refreshToken);
+
+        Long refreshTokenUserId = jwtTokenProvider.getUserId(refreshToken);
+        if (!refreshTokenUserId.equals(userId)) {
+            throw new CustomException(ErrorCode.INVALID_REFRESH_TOKEN);
+        }
+
+        String savedRefreshToken = refreshTokenRepository.findByUserId(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REFRESH_TOKEN));
+
+        if (!savedRefreshToken.equals(refreshToken)) {
+            throw new CustomException(ErrorCode.INVALID_REFRESH_TOKEN);
+        }
+
         refreshTokenRepository.deleteByUserId(userId);
     }
 
@@ -109,18 +122,7 @@ public class AuthService {
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         String newAccessToken = jwtTokenProvider.createAccessToken(user);
-        String newRefreshToken = jwtTokenProvider.createRefreshToken(user);
 
-        refreshTokenRepository.save(
-                user.getId(),
-                newRefreshToken,
-                jwtTokenProvider.getRefreshTokenExpiration()
-        );
-
-        return LoginResponse.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
-                .tokenType("Bearer")
-                .build();
+        return LoginResponse.accessToken(newAccessToken);
     }
 }

@@ -2,6 +2,7 @@ package com.backend.analysis.application;
 
 import com.backend.analysis.domain.AnalysisResult;
 import com.backend.analysis.domain.Satisfaction;
+import com.backend.analysis.dto.response.AnalysisDeleteResponse;
 import com.backend.analysis.dto.response.AnalysisSaveResponse;
 import com.backend.analysis.dto.response.AnalysisSatisfactionResponse;
 import com.backend.analysis.infrastructure.AnalysisResultRepository;
@@ -47,6 +48,21 @@ public class AnalysisService {
         analysisResultRepository.flush();
 
         return AnalysisSatisfactionResponse.from(analysisResult);
+    }
+
+    @Transactional
+    public AnalysisDeleteResponse deleteAnalysisResult(Long userId, Long analysisResultId) {
+        AnalysisResult analysisResult = analysisResultRepository.findByIdAndDeletedAtIsNull(analysisResultId)
+                .orElseThrow(() -> new CustomException(ErrorCode.ANALYSIS_RESULT_NOT_FOUND));
+
+        if (!analysisResult.getUser().getId().equals(userId)) {
+            throw new CustomException(ErrorCode.ANALYSIS_RESULT_FORBIDDEN);
+        }
+
+        analysisResult.delete(LocalDateTime.now());
+        analysisResultRepository.flush();
+
+        return AnalysisDeleteResponse.from(analysisResult);
     }
 
     private Satisfaction parseSatisfaction(String satisfactionValue) {

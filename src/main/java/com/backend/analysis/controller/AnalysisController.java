@@ -3,6 +3,7 @@ package com.backend.analysis.controller;
 import com.backend.analysis.application.AnalysisService;
 import com.backend.analysis.dto.request.AnalysisResumeSaveRequest;
 import com.backend.analysis.dto.request.AnalysisSatisfactionRequest;
+import com.backend.analysis.dto.response.AnalysisDeleteResponse;
 import com.backend.analysis.dto.response.AnalysisSaveResponse;
 import com.backend.analysis.dto.response.AnalysisSatisfactionResponse;
 import com.backend.global.response.ApiResponse;
@@ -12,6 +13,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -54,6 +56,20 @@ public class AnalysisController {
                 principal.getUserId(),
                 analysisResultId,
                 request.getSatisfaction()
+        );
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @DeleteMapping("/{analysisResultId}")
+    @SecurityRequirement(name = JWT_SECURITY_SCHEME_NAME)
+    public ResponseEntity<ApiResponse<AnalysisDeleteResponse>> deleteAnalysisResult(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long analysisResultId
+    ) {
+        AnalysisDeleteResponse response = analysisService.deleteAnalysisResult(
+                principal.getUserId(),
+                analysisResultId
         );
 
         return ResponseEntity.ok(ApiResponse.success(response));

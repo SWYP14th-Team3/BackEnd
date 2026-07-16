@@ -117,4 +117,8 @@ public class AnalysisResult extends BaseTimeEntity {
         this.resumeCurrentText = resumeCurrentText;
         this.lastSavedAt = savedAt;
     }
+
+    public void updateSatisfaction(Satisfaction satisfaction) {
+        this.satisfaction = satisfaction;
+    }
 }

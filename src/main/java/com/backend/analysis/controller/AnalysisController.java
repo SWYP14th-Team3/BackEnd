@@ -2,7 +2,9 @@ package com.backend.analysis.controller;
 
 import com.backend.analysis.application.AnalysisService;
 import com.backend.analysis.dto.request.AnalysisResumeSaveRequest;
+import com.backend.analysis.dto.request.AnalysisSatisfactionRequest;
 import com.backend.analysis.dto.response.AnalysisSaveResponse;
+import com.backend.analysis.dto.response.AnalysisSatisfactionResponse;
 import com.backend.global.response.ApiResponse;
 import com.backend.global.security.UserPrincipal;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -36,6 +38,22 @@ public class AnalysisController {
                 principal.getUserId(),
                 analysisResultId,
                 request.getResumeCurrentText()
+        );
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PatchMapping("/{analysisResultId}/satisfaction")
+    @SecurityRequirement(name = JWT_SECURITY_SCHEME_NAME)
+    public ResponseEntity<ApiResponse<AnalysisSatisfactionResponse>> updateSatisfaction(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long analysisResultId,
+            @Valid @RequestBody AnalysisSatisfactionRequest request
+    ) {
+        AnalysisSatisfactionResponse response = analysisService.updateSatisfaction(
+                principal.getUserId(),
+                analysisResultId,
+                request.getSatisfaction()
         );
 
         return ResponseEntity.ok(ApiResponse.success(response));

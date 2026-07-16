@@ -30,7 +30,8 @@ public enum ErrorCode {
 
     // Analysis
     ANALYSIS_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "분석 결과를 찾을 수 없습니다."),
-    ANALYSIS_RESULT_FORBIDDEN(HttpStatus.FORBIDDEN, "해당 분석 결과를 수정할 권한이 없습니다.");
+    ANALYSIS_RESULT_FORBIDDEN(HttpStatus.FORBIDDEN, "해당 분석 결과에 접근할 권한이 없습니다."),
+    INVALID_ANALYSIS_SATISFACTION(HttpStatus.BAD_REQUEST, "satisfaction 값이 올바르지 않습니다.");
 
     private final HttpStatus httpStatus;
     private final String message;

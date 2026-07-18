@@ -11,11 +11,13 @@ import java.time.LocalDateTime;
 public class AnalysisDeleteResponse {
 
     private Long analysisResultId;
+    private Boolean deleted;
     private LocalDateTime deletedAt;
 
     public static AnalysisDeleteResponse from(AnalysisResult analysisResult) {
         return AnalysisDeleteResponse.builder()
                 .analysisResultId(analysisResult.getId())
+                .deleted(true)
                 .deletedAt(analysisResult.getDeletedAt())
                 .build();
     }

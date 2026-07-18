@@ -19,6 +19,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -116,5 +117,49 @@ class AnalysisRepositoryTest {
 
         assertThat(foundEvaluation.getMatchStatus()).isEqualTo(MatchStatus.NEEDS_IMPROVEMENT);
         assertThat(foundEvaluation.getFeedback()).contains("구체적인 성과가 부족");
+    }
+
+    @Test
+    @DisplayName("삭제 처리된 분석 결과는 목록 조회에서 제외된다")
+    void findAllByUserExcludesDeletedAnalysisResult() {
+        // given
+        String unique = String.valueOf(System.currentTimeMillis());
+
+        User user = User.createSocialUser(
+                "deleted" + unique + "@example.com",
+                Provider.GOOGLE,
+                "google-deleted-" + unique,
+                "삭제테스트유저"
+        );
+
+        User savedUser = userRepository.save(user);
+
+        AnalysisResult analysisResult = AnalysisResult.builder()
+                .user(savedUser)
+                .jobInputType(JobInputType.TEXT)
+                .jobUrl(null)
+                .jobPlatform("직접 입력")
+                .jobPostingRaw("백엔드 개발자 채용 공고 원문")
+                .resumeOriginalText("이력서 원문 텍스트")
+                .resumeCurrentText("현재 편집 중인 이력서 텍스트")
+                .companyName("삭제테스트회사")
+                .positionTitle("백엔드 개발자")
+                .overallLevel(OverallLevel.MEDIUM)
+                .redCount(1)
+                .yellowCount(2)
+                .greenCount(3)
+                .build();
+
+        AnalysisResult savedAnalysisResult = analysisResultRepository.save(analysisResult);
+        savedAnalysisResult.delete(LocalDateTime.now());
+        analysisResultRepository.flush();
+
+        // when
+        List<AnalysisResult> analysisResults =
+                analysisResultRepository.findAllByUserAndDeletedAtIsNullOrderByCreatedAtDesc(savedUser);
+
+        // then
+        assertThat(analysisResults).isEmpty();
+        assertThat(savedAnalysisResult.getDeletedAt()).isNotNull();
     }
 }

@@ -121,4 +121,8 @@ public class AnalysisResult extends BaseTimeEntity {
     public void updateSatisfaction(Satisfaction satisfaction) {
         this.satisfaction = satisfaction;
     }
+
+    public void delete(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
 }

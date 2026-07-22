@@ -66,7 +66,7 @@ public class AnalysisController {
             @RequestPart(name = "file", required = false) MultipartFile file,
             @RequestPart(name = "resumePdf", required = false) MultipartFile resumePdf
     ) {
-        MultipartFile selectedResumePdf = file != null ? file : resumePdf;
+        MultipartFile selectedResumePdf = file != null && !file.isEmpty() ? file : resumePdf;
         AnalysisDetailResponse response = analysisService.createAnalysis(
                 principal.getUserId(),
                 jobPostingUrl,

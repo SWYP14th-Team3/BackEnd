@@ -38,15 +38,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class AnalysisService {
+
+    private static final byte[] PDF_HEADER = "%PDF-".getBytes(StandardCharsets.US_ASCII);
 
     private final JobPostingCrawler jobPostingCrawler;
     private final GeminiAnalysisClient geminiAnalysisClient;
@@ -248,9 +254,23 @@ public class AnalysisService {
             throw new CustomException(ErrorCode.INVALID_PDF_FILE);
         }
 
-        if (!"application/pdf".equals(resumePdf.getContentType())) {
+        if (!hasPdfHeader(resumePdf)) {
             throw new CustomException(ErrorCode.INVALID_PDF_FILE);
         }
+    }
+
+    private boolean hasPdfHeader(MultipartFile resumePdf) {
+        byte[] header = new byte[PDF_HEADER.length];
+
+        try (InputStream inputStream = resumePdf.getInputStream()) {
+            if (inputStream.readNBytes(header, 0, PDF_HEADER.length) != PDF_HEADER.length) {
+                return false;
+            }
+        } catch (IOException e) {
+            return false;
+        }
+
+        return Arrays.equals(PDF_HEADER, header);
     }
 
     private void validateJobPostingInput(

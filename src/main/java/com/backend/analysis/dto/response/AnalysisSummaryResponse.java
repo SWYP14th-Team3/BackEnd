@@ -32,8 +32,8 @@ public class AnalysisSummaryResponse {
 
         return AnalysisSummaryResponse.builder()
                 .analysisResultId(analysisResult.getId())
-                .companyName(analysisResult.getCompanyName())
-                .positionTitle(analysisResult.getPositionTitle())
+                .companyName(analysisResult.getJobDescription().getCompanyName())
+                .positionTitle(analysisResult.getJobDescription().getPositionTitle())
                 .createdAt(analysisResult.getCreatedAt())
                 .retryCount(retryCount)
                 .remainingRetryCount(Math.max(0, MAX_RETRY_COUNT - retryCount))

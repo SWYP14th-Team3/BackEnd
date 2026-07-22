@@ -29,7 +29,9 @@ public class AnalysisService {
             throw new CustomException(ErrorCode.ANALYSIS_RESULT_FORBIDDEN);
         }
 
-        analysisResult.updateResumeCurrentText(resumeCurrentText, LocalDateTime.now());
+        LocalDateTime savedAt = LocalDateTime.now();
+        analysisResult.getUserResume().updateResumeContent(resumeCurrentText, savedAt);
+        analysisResult.markSaved(savedAt);
         analysisResultRepository.flush();
 
         return AnalysisSaveResponse.from(analysisResult);

@@ -25,6 +25,10 @@ public class RequirementEvaluation {
     @JoinColumn(name = "requirement_id", nullable = false, unique = true)
     private JobRequirement jobRequirement;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "analysis_result_id", nullable = false)
+    private AnalysisResult analysisResult;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "match_status", nullable = false, length = 30)
     private MatchStatus matchStatus;
@@ -54,6 +58,7 @@ public class RequirementEvaluation {
             String revisionSuggestion
     ) {
         this.jobRequirement = jobRequirement;
+        this.analysisResult = jobRequirement.getAnalysisResult();
         this.matchStatus = matchStatus;
         this.resumeEvidence = resumeEvidence;
         this.feedback = feedback;

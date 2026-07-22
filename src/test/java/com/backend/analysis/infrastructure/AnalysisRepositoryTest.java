@@ -3,12 +3,13 @@ package com.backend.analysis.infrastructure;
 import com.backend.global.config.JpaAuditingConfig;
 import org.springframework.context.annotation.Import;
 import com.backend.analysis.domain.AnalysisResult;
-import com.backend.analysis.domain.JobInputType;
+import com.backend.analysis.domain.JobDescription;
 import com.backend.analysis.domain.JobRequirement;
 import com.backend.analysis.domain.MatchStatus;
 import com.backend.analysis.domain.OverallLevel;
 import com.backend.analysis.domain.RequirementCategory;
 import com.backend.analysis.domain.RequirementEvaluation;
+import com.backend.analysis.domain.UserResume;
 import com.backend.user.domain.Provider;
 import com.backend.user.domain.User;
 import com.backend.user.infrastructure.UserRepository;
@@ -37,6 +38,12 @@ class AnalysisRepositoryTest {
     private AnalysisResultRepository analysisResultRepository;
 
     @Autowired
+    private UserResumeRepository userResumeRepository;
+
+    @Autowired
+    private JobDescriptionRepository jobDescriptionRepository;
+
+    @Autowired
     private JobRequirementRepository jobRequirementRepository;
 
     @Autowired
@@ -57,16 +64,28 @@ class AnalysisRepositoryTest {
 
         User savedUser = userRepository.save(user);
 
-        AnalysisResult analysisResult = AnalysisResult.builder()
+        UserResume userResume = UserResume.builder()
                 .user(savedUser)
-                .jobInputType(JobInputType.TEXT)
-                .jobUrl(null)
-                .jobPlatform("직접 입력")
-                .jobPostingRaw("백엔드 개발자 채용 공고 원문")
-                .resumeOriginalText("이력서 원문 텍스트")
-                .resumeCurrentText("현재 편집 중인 이력서 텍스트")
+                .resumeContent("현재 편집 중인 이력서 텍스트")
+                .resumeFileName("resume.md")
+                .build();
+
+        UserResume savedUserResume = userResumeRepository.save(userResume);
+
+        JobDescription jobDescription = JobDescription.builder()
+                .user(savedUser)
                 .companyName("테스트회사")
                 .positionTitle("백엔드 개발자")
+                .jobPlatform("직접 입력")
+                .jdContent("백엔드 개발자 채용 공고 원문")
+                .build();
+
+        JobDescription savedJobDescription = jobDescriptionRepository.save(jobDescription);
+
+        AnalysisResult analysisResult = AnalysisResult.builder()
+                .user(savedUser)
+                .userResume(savedUserResume)
+                .jobDescription(savedJobDescription)
                 .overallLevel(OverallLevel.MEDIUM)
                 .redCount(1)
                 .yellowCount(2)
@@ -108,7 +127,8 @@ class AnalysisRepositoryTest {
 
         // then
         assertThat(analysisResults).hasSize(1);
-        assertThat(analysisResults.get(0).getCompanyName()).isEqualTo("테스트회사");
+        assertThat(analysisResults.get(0).getJobDescription().getCompanyName()).isEqualTo("테스트회사");
+        assertThat(analysisResults.get(0).getUserResume().getResumeContent()).isEqualTo("현재 편집 중인 이력서 텍스트");
         assertThat(analysisResults.get(0).getRetryCount()).isEqualTo(0);
         assertThat(analysisResults.get(0).getSatisfaction()).isNull();
 
@@ -134,16 +154,28 @@ class AnalysisRepositoryTest {
 
         User savedUser = userRepository.save(user);
 
-        AnalysisResult analysisResult = AnalysisResult.builder()
+        UserResume userResume = UserResume.builder()
                 .user(savedUser)
-                .jobInputType(JobInputType.TEXT)
-                .jobUrl(null)
-                .jobPlatform("직접 입력")
-                .jobPostingRaw("백엔드 개발자 채용 공고 원문")
-                .resumeOriginalText("이력서 원문 텍스트")
-                .resumeCurrentText("현재 편집 중인 이력서 텍스트")
+                .resumeContent("현재 편집 중인 이력서 텍스트")
+                .resumeFileName("resume.md")
+                .build();
+
+        UserResume savedUserResume = userResumeRepository.save(userResume);
+
+        JobDescription jobDescription = JobDescription.builder()
+                .user(savedUser)
                 .companyName("삭제테스트회사")
                 .positionTitle("백엔드 개발자")
+                .jobPlatform("직접 입력")
+                .jdContent("백엔드 개발자 채용 공고 원문")
+                .build();
+
+        JobDescription savedJobDescription = jobDescriptionRepository.save(jobDescription);
+
+        AnalysisResult analysisResult = AnalysisResult.builder()
+                .user(savedUser)
+                .userResume(savedUserResume)
+                .jobDescription(savedJobDescription)
                 .overallLevel(OverallLevel.MEDIUM)
                 .redCount(1)
                 .yellowCount(2)

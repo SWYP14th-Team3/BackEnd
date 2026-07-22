@@ -26,33 +26,13 @@ public class AnalysisResult extends BaseTimeEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "job_input_type", nullable = false, length = 20)
-    private JobInputType jobInputType;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "resume_num", nullable = false)
+    private UserResume userResume;
 
-    @Column(name = "job_url", length = 1000)
-    private String jobUrl;
-
-    @Column(name = "job_platform", length = 100)
-    private String jobPlatform;
-
-    @Lob
-    @Column(name = "job_posting_raw", nullable = false, columnDefinition = "TEXT")
-    private String jobPostingRaw;
-
-    @Lob
-    @Column(name = "resume_original_text", nullable = false, columnDefinition = "TEXT")
-    private String resumeOriginalText;
-
-    @Lob
-    @Column(name = "resume_current_text", nullable = false, columnDefinition = "TEXT")
-    private String resumeCurrentText;
-
-    @Column(name = "company_name", length = 100)
-    private String companyName;
-
-    @Column(name = "position_title", length = 100)
-    private String positionTitle;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "jd_num", nullable = false)
+    private JobDescription jobDescription;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "overall_level", nullable = false, length = 20)
@@ -83,28 +63,16 @@ public class AnalysisResult extends BaseTimeEntity {
     @Builder
     private AnalysisResult(
             User user,
-            JobInputType jobInputType,
-            String jobUrl,
-            String jobPlatform,
-            String jobPostingRaw,
-            String resumeOriginalText,
-            String resumeCurrentText,
-            String companyName,
-            String positionTitle,
+            UserResume userResume,
+            JobDescription jobDescription,
             OverallLevel overallLevel,
             Integer redCount,
             Integer yellowCount,
             Integer greenCount
     ) {
         this.user = user;
-        this.jobInputType = jobInputType;
-        this.jobUrl = jobUrl;
-        this.jobPlatform = jobPlatform;
-        this.jobPostingRaw = jobPostingRaw;
-        this.resumeOriginalText = resumeOriginalText;
-        this.resumeCurrentText = resumeCurrentText;
-        this.companyName = companyName;
-        this.positionTitle = positionTitle;
+        this.userResume = userResume;
+        this.jobDescription = jobDescription;
         this.overallLevel = overallLevel;
         this.redCount = redCount;
         this.yellowCount = yellowCount;
@@ -113,8 +81,7 @@ public class AnalysisResult extends BaseTimeEntity {
         this.satisfaction = null;
     }
 
-    public void updateResumeCurrentText(String resumeCurrentText, LocalDateTime savedAt) {
-        this.resumeCurrentText = resumeCurrentText;
+    public void markSaved(LocalDateTime savedAt) {
         this.lastSavedAt = savedAt;
     }
 

@@ -1,7 +1,6 @@
 package com.backend.analysis.dto.response;
 
 import com.backend.analysis.domain.AnalysisResult;
-import com.backend.analysis.domain.JobInputType;
 import com.backend.analysis.domain.OverallLevel;
 import com.backend.analysis.domain.Satisfaction;
 import lombok.Builder;
@@ -18,12 +17,10 @@ public class AnalysisDetailResponse {
 
     private Long analysisResultId;
 
-    private JobInputType jobInputType;
-    private String jobUrl;
     private String jobPlatform;
 
     // 원본 공고 탭에서 사용
-    private String jobPostingRaw;
+    private String jdContent;
 
     // 오른쪽 내 이력서 textarea에서 사용
     private String resumeCurrentText;
@@ -55,13 +52,11 @@ public class AnalysisDetailResponse {
 
         return AnalysisDetailResponse.builder()
                 .analysisResultId(analysisResult.getId())
-                .jobInputType(analysisResult.getJobInputType())
-                .jobUrl(analysisResult.getJobUrl())
-                .jobPlatform(analysisResult.getJobPlatform())
-                .jobPostingRaw(analysisResult.getJobPostingRaw())
-                .resumeCurrentText(analysisResult.getResumeCurrentText())
-                .companyName(analysisResult.getCompanyName())
-                .positionTitle(analysisResult.getPositionTitle())
+                .jobPlatform(analysisResult.getJobDescription().getJobPlatform())
+                .jdContent(analysisResult.getJobDescription().getJdContent())
+                .resumeCurrentText(analysisResult.getUserResume().getResumeContent())
+                .companyName(analysisResult.getJobDescription().getCompanyName())
+                .positionTitle(analysisResult.getJobDescription().getPositionTitle())
                 .overallLevel(analysisResult.getOverallLevel())
                 .redCount(analysisResult.getRedCount())
                 .yellowCount(analysisResult.getYellowCount())

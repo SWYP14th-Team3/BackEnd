@@ -25,7 +25,6 @@ public class CustomException extends RuntimeException {
     private final ErrorCode errorCode;
 
     public CustomException(ErrorCode errorCode) {
-        // ErrorCode의 메시지를 RuntimeException 메시지로 전달
         super(errorCode.getMessage());
         this.errorCode = errorCode;
     }

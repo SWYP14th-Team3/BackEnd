@@ -16,7 +16,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(CustomException.class)
     public ResponseEntity<ApiResponse<Void>> handleCustomException(CustomException e) {
-        // 서비스에서 던진 프로젝트 전용 예외를 공통 응답으로 변환
         ErrorCode errorCode = e.getErrorCode();
         log.warn("CustomException: {}", errorCode.getMessage());
         return ResponseEntity
@@ -26,7 +25,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException e) {
-        // DTO 검증 실패 메시지를 하나의 문자열로 합쳐 반환
         String message = e.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining(", "));
@@ -38,7 +36,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
-        // 예상하지 못한 예외는 서버 오류 응답으로 변환
         log.error("UnhandledException: {}", e.getMessage(), e);
         return ResponseEntity
                 .internalServerError()

@@ -17,7 +17,7 @@ public class AnalysisSaveResponse {
     public static AnalysisSaveResponse from(AnalysisResult analysisResult) {
         return AnalysisSaveResponse.builder()
                 .analysisResultId(analysisResult.getId())
-                .resumeCurrentText(analysisResult.getResumeCurrentText())
+                .resumeCurrentText(analysisResult.getUserResume().getResumeContent())
                 .updatedAt(analysisResult.getUpdatedAt())
                 .build();
     }

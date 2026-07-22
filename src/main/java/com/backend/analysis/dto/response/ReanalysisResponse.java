@@ -46,7 +46,7 @@ public class ReanalysisResponse {
                 .greenCount(analysisResult.getGreenCount())
                 .retryCount(retryCount)
                 .remainingRetryCount(Math.max(0, MAX_RETRY_COUNT - retryCount))
-                .resumeCurrentText(analysisResult.getResumeCurrentText())
+                .resumeCurrentText(analysisResult.getUserResume().getResumeContent())
                 .updatedAt(analysisResult.getUpdatedAt())
                 .lastSavedAt(analysisResult.getLastSavedAt())
                 .requirements(requirements)

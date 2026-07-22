@@ -231,7 +231,7 @@ public class AnalysisService {
 - 응답은 반드시 { 로 시작해서 } 로 끝나야 해.
 - 이력서에 없는 내용은 절대 지어내지 마.
 - 채용공고의 필수요건과 우대사항을 항목별로 분석해.
-- 각 항목은 DB의 JOB_REQUIREMENT 1개와 REQUIREMENT_EVALUATION 1개로 저장될 수 있어야 해.
+- 각 항목은 requirements 배열의 객체 1개로 저장될 수 있어야 해.
 - 사용자가 화면에서 “🚀 회사명 포지션명 채용공고 핏(Fit) 분석 리포트” 형태로 보여줄 수 있도록 충분히 자세히 작성해.
 
 진단 기준:
@@ -253,38 +253,20 @@ overallLevel 기준:
 반환 JSON 형식:
 
 {
-  "analysisResult": {
-    "jobInputType": "URL",
-    "jobUrl": "채용공고 URL. 직접 입력이면 null",
-    "jobPlatform": "JOBKOREA 또는 SARAMIN 또는 WANTED 또는 UNKNOWN",
-    "jobPostingRaw": "채용공고 원문 텍스트",
-    "resumeOriginalText": "PDF 이력서에서 추출한 핵심 텍스트",
-    "resumeCurrentText": "resumeOriginalText와 동일한 값",
-    "companyName": "회사명",
-    "positionTitle": "포지션명",
-    "overallLevel": "HIGH 또는 MEDIUM 또는 LOW",
-    "redCount": 0,
-    "yellowCount": 0,
-    "greenCount": 0,
-    "retryCount": 0,
-    "satisfaction": null,
-    "summaryOpinion": "Ⅲ. 총평 및 이직 성공 전략의 종합 의견에 해당하는 내용",
-    "coreStrategy": "Ⅲ. 총평 및 이직 성공 전략의 핵심 과제에 해당하는 내용"
-  },
+  "companyName": "회사명",
+  "positionTitle": "포지션명",
+  "overallLevel": "HIGH 또는 MEDIUM 또는 LOW",
+  "resumeOriginalText": "PDF 이력서에서 추출한 핵심 텍스트",
   "requirements": [
     {
-      "jobRequirement": {
-        "category": "REQUIRED 또는 WORK_SKILL 또는 DOMAIN 또는 PREFERRED",
-        "title": "요건명",
-        "description": "요건 설명",
-        "sourceText": "채용공고에서 해당 요건을 판단한 원문 근거"
-      },
-      "requirementEvaluation": {
-        "matchStatus": "CONFIRMED 또는 NEEDS_IMPROVEMENT 또는 MISSING",
-        "resumeEvidence": "이력서 근거. 이력서에서 확인된 기술 스택, 프로젝트, 경력, 성과를 구체적으로 작성",
-        "feedback": "진단 이유. 왜 완전 충족/부분 보완/없음인지 채용 담당자 관점에서 상세히 설명",
-        "revisionSuggestion": "이력서에 바로 추가하거나 수정할 수 있는 문장 형태의 제안"
-      }
+      "category": "REQUIRED 또는 WORK_SKILL 또는 DOMAIN 또는 PREFERRED",
+      "title": "요건명",
+      "description": "요건 설명",
+      "sourceText": "채용공고에서 해당 요건을 판단한 원문 근거",
+      "matchStatus": "CONFIRMED 또는 NEEDS_IMPROVEMENT 또는 MISSING",
+      "resumeEvidence": "이력서 근거. 이력서에서 확인된 기술 스택, 프로젝트, 경력, 성과를 구체적으로 작성",
+      "feedback": "진단 이유. 왜 완전 충족/부분 보완/없음인지 채용 담당자 관점에서 상세히 설명",
+      "revisionSuggestion": "이력서에 바로 추가하거나 수정할 수 있는 문장 형태의 제안"
     }
   ]
 }
@@ -299,13 +281,8 @@ overallLevel 기준:
 7. feedback은 “진단 이유:”에 들어갈 문장처럼 자세히 작성해.
 8. revisionSuggestion은 “이렇게 보완해보세요 / 수정 제안:”에 들어갈 문장처럼 작성해.
 9. revisionSuggestion에는 실제 이력서에 넣을 수 있는 문장 예시를 포함해.
-10. redCount는 MISSING 개수야.
-11. yellowCount는 NEEDS_IMPROVEMENT 개수야.
-12. greenCount는 CONFIRMED 개수야.
-13. redCount + yellowCount + greenCount는 requirements 배열 길이와 같아야 해.
-14. retryCount는 최초 분석이므로 0으로 넣어.
-15. satisfaction은 최초 분석이므로 null로 넣어.
-16. id, user_id, analysis_result_id, requirement_id, created_at, updated_at, last_saved_at, deleted_at은 서버에서 넣을 값이므로 JSON에 포함하지 마.
+10. redCount, yellowCount, greenCount는 서버에서 계산하므로 JSON에 포함하지 마.
+11. id, user_id, analysis_result_id, requirement_id, created_at, updated_at, last_saved_at, deleted_at은 서버에서 넣을 값이므로 JSON에 포함하지 마.
 
 화면 출력용 문체:
 - resumeEvidence, feedback, revisionSuggestion은 사용자가 보여준 리포트 예시처럼 전문적이고 구체적으로 작성해.

@@ -22,6 +22,8 @@ public enum ErrorCode {
     JOB_POSTING_CRAWL_ERROR(HttpStatus.BAD_GATEWAY, "채용공고를 불러오는 중 오류가 발생했습니다."),
     GEMINI_RESPONSE_PARSE_ERROR(HttpStatus.BAD_GATEWAY, "Gemini 응답을 해석하는 중 오류가 발생했습니다.");
 
+    // 클라이언트에 내려줄 HTTP 상태 코드
     private final HttpStatus httpStatus;
+    // 클라이언트에 내려줄 오류 메시지
     private final String message;
 }

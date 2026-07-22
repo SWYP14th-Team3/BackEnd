@@ -54,6 +54,9 @@ docker compose ps
 
 ### 3. Spring Boot 실행
 
+`./gradlew bootRun`은 `.env.local`을 직접 읽어 JWT와 OAuth 환경변수를 주입합니다.
+`source .env.local`을 실행할 필요가 없습니다.
+
 macOS 또는 Linux:
 
 ```bash
@@ -66,10 +69,25 @@ Windows:
 gradlew.bat bootRun
 ```
 
+로컬 Gradle 실행에서는 `SPRING_DATASOURCE_*`, `SPRING_DATA_REDIS_*` 값을 `.env.local`에서 주입하지 않습니다.
+DB와 Redis는 `application.yml`의 `localhost:3307`, `localhost:6379` 설정을 사용합니다.
+
 실행이 완료되면 다음 주소에서 서버에 접근할 수 있습니다.
 
 ```text
 http://localhost:8080
+```
+
+Swagger UI는 다음 주소에서 확인할 수 있습니다.
+
+```text
+http://localhost:8080/swagger-ui.html
+```
+
+OpenAPI JSON 문서는 다음 주소에서 확인할 수 있습니다.
+
+```text
+http://localhost:8080/v3/api-docs
 ```
 
 ### 4. MySQL 종료

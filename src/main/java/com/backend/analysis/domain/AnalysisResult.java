@@ -1,74 +1,60 @@
 package com.backend.analysis.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
-import java.time.LocalDateTime;
+import com.backend.global.common.entity.BaseTimeEntity;
+import com.backend.user.domain.User;
+import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Getter
 @Entity
 @Table(name = "analysis_result")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class AnalysisResult {
+public class AnalysisResult extends BaseTimeEntity {
 
-    // 분석 결과 한 건의 PK
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // 분석을 요청한 사용자 ID
-    @Column(name = "user_id", nullable = false)
-    private Long userId;
+    // 로그인 후 분석하는 흐름이면 nullable = false
+    // 비회원 분석 결과 저장까지 지원한다면 nullable = true 검토 필요
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 
-    // 저장된 이력서 요약 row ID
-    @Column(name = "resume_num", nullable = false)
-    private Long resumeNum;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "resume_num", nullable = false)
+    private UserResume userResume;
 
-    // 저장된 채용공고 요약 row ID
-    @Column(name = "jd_num", nullable = false)
-    private Long jdNum;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "jd_num", nullable = false)
+    private JobDescription jobDescription;
 
-    @Column(name = "company_name", length = 255)
-    private String companyName;
-
-    @Column(name = "position_title", length = 255)
-    private String positionTitle;
-
+    @Enumerated(EnumType.STRING)
     @Column(name = "overall_level", nullable = false, length = 20)
-    private String overallLevel;
+    private OverallLevel overallLevel;
 
-    // MISSING / NEEDS_IMPROVEMENT / CONFIRMED 개수
     @Column(name = "red_count", nullable = false)
-    private int redCount;
+    private Integer redCount;
 
     @Column(name = "yellow_count", nullable = false)
-    private int yellowCount;
+    private Integer yellowCount;
 
     @Column(name = "green_count", nullable = false)
-    private int greenCount;
+    private Integer greenCount;
 
     @Column(name = "retry_count", nullable = false)
-    private int retryCount;
+    private Integer retryCount;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "satisfaction", length = 20)
-    private String satisfaction;
+    private Satisfaction satisfaction;
 
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
-    @Column(name = "last_saved_at", nullable = false)
+    @Column(name = "last_saved_at")
     private LocalDateTime lastSavedAt;
 
     @Column(name = "deleted_at")
@@ -76,65 +62,34 @@ public class AnalysisResult {
 
     @Builder
     private AnalysisResult(
-            Long userId,
-            Long resumeNum,
-            Long jdNum,
-            String companyName,
-            String positionTitle,
-            String overallLevel,
-            int redCount,
-            int yellowCount,
-            int greenCount
+            User user,
+            UserResume userResume,
+            JobDescription jobDescription,
+            OverallLevel overallLevel,
+            Integer redCount,
+            Integer yellowCount,
+            Integer greenCount
     ) {
-        this.userId = userId;
-        this.resumeNum = resumeNum;
-        this.jdNum = jdNum;
-        this.companyName = companyName;
-        this.positionTitle = positionTitle;
+        this.user = user;
+        this.userResume = userResume;
+        this.jobDescription = jobDescription;
         this.overallLevel = overallLevel;
         this.redCount = redCount;
         this.yellowCount = yellowCount;
         this.greenCount = greenCount;
         this.retryCount = 0;
+        this.satisfaction = null;
     }
 
-    public void updateReanalysis(
-            String companyName,
-            String positionTitle,
-            String overallLevel,
-            int redCount,
-            int yellowCount,
-            int greenCount
-    ) {
-        // 재분석 결과로 분석 요약 정보를 갱신
-        if (companyName != null && !companyName.isBlank()) {
-            this.companyName = companyName;
-        }
-        if (positionTitle != null && !positionTitle.isBlank()) {
-            this.positionTitle = positionTitle;
-        }
-
-        this.overallLevel = overallLevel;
-        this.redCount = redCount;
-        this.yellowCount = yellowCount;
-        this.greenCount = greenCount;
-        this.retryCount++;
+    public void markSaved(LocalDateTime savedAt) {
+        this.lastSavedAt = savedAt;
     }
 
-    @PrePersist
-    void prePersist() {
-        // 최초 저장 시 생성/수정/저장 시간을 같은 값으로 설정
-        LocalDateTime now = LocalDateTime.now();
-        this.createdAt = now;
-        this.updatedAt = now;
-        this.lastSavedAt = now;
+    public void updateSatisfaction(Satisfaction satisfaction) {
+        this.satisfaction = satisfaction;
     }
 
-    @PreUpdate
-    void preUpdate() {
-        // 수정될 때마다 수정/저장 시간을 갱신
-        LocalDateTime now = LocalDateTime.now();
-        this.updatedAt = now;
-        this.lastSavedAt = now;
+    public void delete(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
     }
 }

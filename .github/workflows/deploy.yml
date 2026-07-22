@@ -1,0 +1,170 @@
+name: ResuFit Backend CD Pipeline
+
+on:
+  push:
+    branches: ["develop"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 소스 코드 체크아웃
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      # 2. Java 25 환경 설정
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: "25"
+          distribution: "temurin"
+
+      # 3. Gradle 실행 권한 부여
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      # 4. 애플리케이션 빌드
+      - name: Build with Gradle
+        run: ./gradlew clean build -x test
+
+      # 5. Docker 이미지 빌드 및 파일 저장
+      - name: Build Docker Image
+        run: |
+          docker build -t resufit-app:latest .
+          docker save -o resufit-app.tar resufit-app:latest
+
+      # 6. EC2의 Nginx 설정 경로 준비
+      - name: Prepare Nginx Directory on EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+
+            sudo mkdir -p /home/ubuntu/app/nginx/conf.d
+
+            if [ -d /home/ubuntu/app/nginx/conf.d/default.conf ]; then
+              sudo rm -rf /home/ubuntu/app/nginx/conf.d/default.conf
+            fi
+
+            sudo chown -R $USER:$USER /home/ubuntu/app/nginx
+
+            chmod 755 /home/ubuntu/app/nginx
+            chmod 755 /home/ubuntu/app/nginx/conf.d
+
+      # 7. Docker 이미지와 배포 설정 파일 전송
+      - name: Transfer Files to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "resufit-app.tar,docker-compose-prod.yml,nginx/conf.d/default.conf"
+          target: "/home/ubuntu/app"
+          overwrite: true
+
+      # 8. EC2 서버 배포
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+
+            cd /home/ubuntu/app
+
+            docker load -i resufit-app.tar
+            rm -f resufit-app.tar
+
+            docker compose -f docker-compose-prod.yml up -d \
+              --remove-orphans
+
+            docker compose -f docker-compose-prod.yml ps
+
+            docker exec resufit-nginx nginx -t
+            docker exec resufit-nginx nginx -s reload
+
+            DOCKER_BIN="$(command -v docker)"
+
+            sudo tee /usr/local/bin/resufit-certbot-renew > /dev/null <<EOF
+            #!/bin/sh
+            set -eu
+
+            sleep "\$(awk 'BEGIN{srand(); print int(rand()*3600)}')"
+
+            cd /home/ubuntu/app
+
+            $DOCKER_BIN compose \
+              -f docker-compose-prod.yml \
+              --profile certbot \
+              run --rm certbot renew --quiet
+
+            $DOCKER_BIN exec resufit-nginx nginx -s reload
+            EOF
+
+            sudo chmod 755 /usr/local/bin/resufit-certbot-renew
+
+            sudo tee /etc/cron.d/resufit-certbot-renew > /dev/null <<'EOF'
+            0 0,12 * * * ubuntu /usr/local/bin/resufit-certbot-renew >> /home/ubuntu/app/certbot-renew.log 2>&1
+            EOF
+
+            sudo chmod 644 /etc/cron.d/resufit-certbot-renew
+            sudo systemctl reload cron || true
+
+            ATTEMPT=1
+            MAX_ATTEMPTS=30
+
+            until curl \
+              --fail \
+              --silent \
+              --show-error \
+              https://api.resufit.site/health
+            do
+              if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
+                echo "Spring Boot health check failed."
+
+                docker logs resufit-app --tail 200
+                docker logs resufit-nginx --tail 100
+
+                exit 1
+              fi
+
+              echo "Waiting for Spring Boot... ($ATTEMPT/$MAX_ATTEMPTS)"
+
+              ATTEMPT=$((ATTEMPT + 1))
+              sleep 5
+            done
+
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              http://localhost/nginx-health
+
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              https://api.resufit.site/v3/api-docs \
+              > /dev/null
+
+            echo "Deployment verification completed."
+
+      # 9. Slack 배포 결과 알림
+      - name: Slack Notification
+        if: always()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_CHANNEL: "개발-알림"
+          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
+          SLACK_TITLE: ${{ job.status == 'success' && '🚀 ResuFit 배포 성공' || '❌ ResuFit 배포 실패' }}
+          SLACK_MESSAGE: |
+            *커밋:* ${{ github.event.head_commit.message }}
+            *결과:* ${{ job.status }}
+            상세 확인: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

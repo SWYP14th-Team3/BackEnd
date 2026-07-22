@@ -1,0 +1,10 @@
+package com.backend.global.config;
+
+import com.backend.auth.infrastructure.JwtProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@EnableConfigurationProperties(JwtProperties.class)
+public class JwtConfig {
+}

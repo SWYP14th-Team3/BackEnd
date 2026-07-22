@@ -3,14 +3,11 @@
 #   ├── local(로컬) 설정
 #   └── prod(운영) 설정
 spring:
-  config:
-    import: optional:file:.env.local[.properties]
-
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local}
+    active: local
 
   application:
-    name: ${SPRING_APPLICATION_NAME:BackEnd}
+    name: BackEnd
 
 ---
 spring:
@@ -19,14 +16,14 @@ spring:
       on-profile: local
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
+    url: jdbc:mysql://localhost:3307/resume?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: root
+    password: 1234
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: create
     show-sql: true
     properties:
       hibernate:
@@ -37,23 +34,14 @@ spring:
     pathmatch:
       matching-strategy: ant_path_matcher
 
-  servlet:
-    multipart:
-      max-file-size: 50MB
-      max-request-size: 50MB
-
 server:
-  port: ${SERVER_PORT:8080}
+  port: 8080
 
 logging:
   level:
     com.backend: DEBUG
-    org.hibernate.SQL: INFO
-    org.hibernate.orm.jdbc.bind: INFO
-
-gemini:
-  api-key: ${GEMINI_API_KEY}
-  model: ${GEMINI_MODEL:gemini-3.1-flash-lite}
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
 
 ---
 spring:
@@ -62,9 +50,9 @@ spring:
       on-profile: prod
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -73,10 +61,8 @@ spring:
     show-sql: false
 
 server:
-  port: ${SERVER_PORT:8080}
+  port: 8080
 
 logging:
   level:
     com.backend: INFO
-
----

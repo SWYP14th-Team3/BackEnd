@@ -32,6 +32,7 @@ import com.backend.global.exception.ErrorCode;
 import com.backend.user.domain.User;
 import com.backend.user.infrastructure.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -45,14 +46,15 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AnalysisService {
 
     private static final byte[] PDF_HEADER = "%PDF-".getBytes(StandardCharsets.US_ASCII);
+    private static final int PDF_HEADER_SCAN_LIMIT = 1024;
 
     private final JobPostingCrawler jobPostingCrawler;
     private final GeminiAnalysisClient geminiAnalysisClient;
@@ -250,27 +252,58 @@ public class AnalysisService {
     }
 
     private void validatePdf(MultipartFile resumePdf) {
-        if (resumePdf == null || resumePdf.isEmpty()) {
+        if (resumePdf == null) {
+            log.warn("Invalid PDF upload: file part is missing");
             throw new CustomException(ErrorCode.INVALID_PDF_FILE);
         }
 
-        if (!hasPdfHeader(resumePdf)) {
+        if (resumePdf.isEmpty()) {
+            log.warn(
+                    "Invalid PDF upload: file part is empty, partName={}, contentType={}, size={}",
+                    resumePdf.getName(),
+                    resumePdf.getContentType(),
+                    resumePdf.getSize()
+            );
+            throw new CustomException(ErrorCode.INVALID_PDF_FILE);
+        }
+
+        int pdfHeaderOffset = findPdfHeaderOffset(resumePdf);
+        if (pdfHeaderOffset < 0) {
+            log.warn(
+                    "Invalid PDF upload: PDF header not found, partName={}, contentType={}, size={}",
+                    resumePdf.getName(),
+                    resumePdf.getContentType(),
+                    resumePdf.getSize()
+            );
             throw new CustomException(ErrorCode.INVALID_PDF_FILE);
         }
     }
 
-    private boolean hasPdfHeader(MultipartFile resumePdf) {
-        byte[] header = new byte[PDF_HEADER.length];
-
+    private int findPdfHeaderOffset(MultipartFile resumePdf) {
         try (InputStream inputStream = resumePdf.getInputStream()) {
-            if (inputStream.readNBytes(header, 0, PDF_HEADER.length) != PDF_HEADER.length) {
+            byte[] bytes = inputStream.readNBytes(PDF_HEADER_SCAN_LIMIT);
+
+            for (int offset = 0; offset <= bytes.length - PDF_HEADER.length; offset++) {
+                if (hasPdfHeaderAt(bytes, offset)) {
+                    return offset;
+                }
+            }
+
+            return -1;
+        } catch (IOException e) {
+            log.warn("Invalid PDF upload: failed to read file part, partName={}", resumePdf.getName(), e);
+            return -1;
+        }
+    }
+
+    private boolean hasPdfHeaderAt(byte[] bytes, int offset) {
+        for (int i = 0; i < PDF_HEADER.length; i++) {
+            if (bytes[offset + i] != PDF_HEADER[i]) {
                 return false;
             }
-        } catch (IOException e) {
-            return false;
         }
 
-        return Arrays.equals(PDF_HEADER, header);
+        return true;
     }
 
     private void validateJobPostingInput(

@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.nio.charset.StandardCharsets;
+
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
@@ -30,7 +32,20 @@ class AnalysisServiceTest {
                 "file",
                 "resume.pdf",
                 "application/octet-stream",
-                "%PDF-1.7\ncontent".getBytes()
+                "%PDF-1.7\ncontent".getBytes(StandardCharsets.US_ASCII)
+        );
+
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(analysisService, "validatePdf", file));
+    }
+
+    @Test
+    @DisplayName("PDF 헤더 앞에 BOM이나 공백이 있어도 통과한다")
+    void validatePdfAcceptsHeaderNearBeginning() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "resume.pdf",
+                "application/pdf",
+                "\uFEFF \n%PDF-1.7\ncontent".getBytes(StandardCharsets.UTF_8)
         );
 
         assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(analysisService, "validatePdf", file));

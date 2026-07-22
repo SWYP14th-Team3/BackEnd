@@ -17,6 +17,8 @@ public class AnalysisSummaryResponse {
     private String companyName;
     private String positionTitle;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private LocalDateTime lastSavedAt;
 
     private Integer retryCount;
     private Integer remainingRetryCount;
@@ -35,6 +37,8 @@ public class AnalysisSummaryResponse {
                 .companyName(analysisResult.getJobDescription().getCompanyName())
                 .positionTitle(analysisResult.getJobDescription().getPositionTitle())
                 .createdAt(analysisResult.getCreatedAt())
+                .updatedAt(analysisResult.getUpdatedAt())
+                .lastSavedAt(analysisResult.getLastSavedAt())
                 .retryCount(retryCount)
                 .remainingRetryCount(Math.max(0, MAX_RETRY_COUNT - retryCount))
                 .redCount(analysisResult.getRedCount())

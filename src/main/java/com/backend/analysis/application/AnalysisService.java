@@ -17,8 +17,10 @@ import com.backend.analysis.dto.GeminiRequirementResult;
 import com.backend.analysis.dto.GeminiResumeResponse;
 import com.backend.analysis.dto.response.AnalysisDeleteResponse;
 import com.backend.analysis.dto.response.AnalysisDetailResponse;
+import com.backend.analysis.dto.response.AnalysisPageResponse;
 import com.backend.analysis.dto.response.AnalysisSaveResponse;
 import com.backend.analysis.dto.response.AnalysisSatisfactionResponse;
+import com.backend.analysis.dto.response.AnalysisSummaryResponse;
 import com.backend.analysis.dto.response.JobRequirementResponse;
 import com.backend.analysis.infrastructure.AnalysisResultRepository;
 import com.backend.analysis.infrastructure.JobDescriptionRepository;
@@ -30,6 +32,8 @@ import com.backend.global.exception.ErrorCode;
 import com.backend.user.domain.User;
 import com.backend.user.infrastructure.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -52,6 +56,29 @@ public class AnalysisService {
     private final AnalysisResultRepository analysisResultRepository;
     private final JobRequirementRepository jobRequirementRepository;
     private final RequirementEvaluationRepository requirementEvaluationRepository;
+
+    @Transactional(readOnly = true)
+    public AnalysisPageResponse<AnalysisSummaryResponse> searchAnalysesByCompanyName(
+            Long userId,
+            String companyName,
+            int page,
+            int size
+    ) {
+        validateCompanySearchRequest(companyName, page, size);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        Page<AnalysisSummaryResponse> summaries = analysisResultRepository
+                .findAllByUserAndDeletedAtIsNullAndJobDescription_CompanyNameContainingIgnoreCaseOrderByCreatedAtDesc(
+                        user,
+                        companyName.trim(),
+                        PageRequest.of(page, size)
+                )
+                .map(AnalysisSummaryResponse::from);
+
+        return AnalysisPageResponse.from(summaries);
+    }
 
     @Transactional
     public AnalysisDetailResponse createAnalysis(
@@ -165,6 +192,16 @@ public class AnalysisService {
         }
 
         return analysisResult;
+    }
+
+    private void validateCompanySearchRequest(String companyName, int page, int size) {
+        if (companyName == null || companyName.isBlank()) {
+            throw new CustomException(ErrorCode.COMPANY_NAME_REQUIRED);
+        }
+
+        if (page < 0 || size <= 0) {
+            throw new CustomException(ErrorCode.INVALID_PAGE_REQUEST);
+        }
     }
 
     private List<JobRequirementResponse> saveRequirementsAndEvaluations(

@@ -7,6 +7,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.stream.Collectors;
 
@@ -34,6 +35,19 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .badRequest()
                 .body(ApiResponse.error(400, message));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatchException(MethodArgumentTypeMismatchException e) {
+        String parameterName = e.getName();
+        ErrorCode errorCode = ("page".equals(parameterName) || "size".equals(parameterName))
+                ? ErrorCode.INVALID_PAGE_REQUEST
+                : ErrorCode.INVALID_INPUT_VALUE;
+
+        log.warn("TypeMismatchException: parameter={}, value={}", parameterName, e.getValue());
+        return ResponseEntity
+                .status(errorCode.getHttpStatus())
+                .body(ApiResponse.error(errorCode.getHttpStatus().value(), errorCode.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

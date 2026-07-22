@@ -23,7 +23,7 @@ public class User extends BaseCreatedTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(length = 100)
+    @Column(nullable = true, length = 100)
     private String email;
 
     @Enumerated(EnumType.STRING)

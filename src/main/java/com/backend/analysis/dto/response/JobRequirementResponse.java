@@ -11,7 +11,7 @@ import lombok.Getter;
 public class JobRequirementResponse {
 
     private Long requirementId;
-    private RequirementCategory category;
+    private String category;
     private String title;
     private String description;
     private String sourceText;
@@ -23,11 +23,20 @@ public class JobRequirementResponse {
     ) {
         return JobRequirementResponse.builder()
                 .requirementId(requirement.getId())
-                .category(requirement.getCategory())
+                .category(toCategoryLabel(requirement.getCategory()))
                 .title(requirement.getTitle())
                 .description(requirement.getDescription())
                 .sourceText(requirement.getSourceText())
                 .evaluation(RequirementEvaluationResponse.from(evaluation))
                 .build();
+    }
+
+    private static String toCategoryLabel(RequirementCategory category) {
+        return switch (category) {
+            case QUALIFICATION -> "자격요건";
+            case WORK_COMPETENCY -> "업무역량";
+            case DOMAIN -> "도메인";
+            case PREFERENCE -> "우대사항";
+        };
     }
 }

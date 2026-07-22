@@ -4,6 +4,7 @@ import com.backend.analysis.client.GeminiAnalysisClient;
 import com.backend.analysis.client.JobPostingCrawler;
 import com.backend.analysis.domain.AnalysisResult;
 import com.backend.analysis.domain.JobDescription;
+import com.backend.analysis.domain.JobInputType;
 import com.backend.analysis.domain.JobRequirement;
 import com.backend.analysis.domain.MatchStatus;
 import com.backend.analysis.domain.OverallLevel;
@@ -165,7 +166,19 @@ public class AnalysisService {
                 analysisResponse.requirements()
         );
 
-        return AnalysisDetailResponse.from(analysisResult, requirements);
+        JobInputType jobInputType = hasText(jobPostingUrl) ? JobInputType.URL : JobInputType.TEXT;
+        String jobUrl = jobInputType == JobInputType.URL ? jobPostingUrl.trim() : null;
+        String jobPostingRaw = defaultIfBlank(crawledText, jobDescription.getJdContent());
+        String resumeOriginalText = resume.getResumeContent();
+
+        return AnalysisDetailResponse.from(
+                analysisResult,
+                requirements,
+                jobInputType,
+                jobUrl,
+                jobPostingRaw,
+                resumeOriginalText
+        );
     }
 
     @Transactional
@@ -311,8 +324,8 @@ public class AnalysisService {
             String jobPostingText,
             MultipartFile jobPostingImage
     ) {
-        boolean hasUrl = jobPostingUrl != null && !jobPostingUrl.isBlank();
-        boolean hasText = jobPostingText != null && !jobPostingText.isBlank();
+        boolean hasUrl = hasText(jobPostingUrl);
+        boolean hasText = hasText(jobPostingText);
         boolean hasImage = jobPostingImage != null && !jobPostingImage.isEmpty();
 
         if (!hasUrl && !hasText && !hasImage) {
@@ -424,6 +437,10 @@ public class AnalysisService {
         }
 
         return value;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private String buildResumeFileName(String originalFilename) {

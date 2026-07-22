@@ -32,6 +32,7 @@ public enum ErrorCode {
     ANALYSIS_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "분석 결과를 찾을 수 없습니다."),
     ANALYSIS_RESULT_FORBIDDEN(HttpStatus.FORBIDDEN, "해당 분석 결과에 접근할 권한이 없습니다."),
     INVALID_ANALYSIS_SATISFACTION(HttpStatus.BAD_REQUEST, "satisfaction 값이 올바르지 않습니다."),
+    COMPANY_NAME_REQUIRED(HttpStatus.BAD_REQUEST, "검색어를 입력해주세요."),
     INVALID_PAGE_REQUEST(HttpStatus.BAD_REQUEST, "잘못된 페이지 요청입니다."),
     INVALID_PDF_FILE(HttpStatus.BAD_REQUEST, "PDF 파일만 업로드할 수 있습니다."),
     GEMINI_API_ERROR(HttpStatus.BAD_GATEWAY, "Gemini API 호출 중 오류가 발생했습니다."),

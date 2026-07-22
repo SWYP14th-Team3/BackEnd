@@ -56,6 +56,9 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testAnnotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+
+    // HTML 파싱
+    implementation 'org.jsoup:jsoup:1.22.2'
 }
 
 tasks.named('test') {

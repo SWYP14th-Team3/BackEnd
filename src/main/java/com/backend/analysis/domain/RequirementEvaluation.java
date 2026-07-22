@@ -38,7 +38,7 @@ public class RequirementEvaluation {
     private String resumeEvidence;
 
     @Lob
-    @Column(name = "feedback", nullable = false, columnDefinition = "TEXT")
+    @Column(name = "feedback", columnDefinition = "TEXT")
     private String feedback;
 
     @Lob

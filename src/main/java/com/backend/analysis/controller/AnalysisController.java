@@ -4,6 +4,7 @@ import com.backend.analysis.application.AnalysisService;
 import com.backend.analysis.dto.request.AnalysisResumeSaveRequest;
 import com.backend.analysis.dto.request.AnalysisSatisfactionRequest;
 import com.backend.analysis.dto.response.AnalysisDeleteResponse;
+import com.backend.analysis.dto.response.AnalysisDetailResponse;
 import com.backend.analysis.dto.response.AnalysisSaveResponse;
 import com.backend.analysis.dto.response.AnalysisSatisfactionResponse;
 import com.backend.global.response.ApiResponse;
@@ -11,14 +12,19 @@ import com.backend.global.security.UserPrincipal;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import static com.backend.global.config.OpenApiConfig.JWT_SECURITY_SCHEME_NAME;
 
@@ -28,6 +34,28 @@ import static com.backend.global.config.OpenApiConfig.JWT_SECURITY_SCHEME_NAME;
 public class AnalysisController {
 
     private final AnalysisService analysisService;
+
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @SecurityRequirement(name = JWT_SECURITY_SCHEME_NAME)
+    public ResponseEntity<ApiResponse<AnalysisDetailResponse>> createAnalysis(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(required = false) String jobPostingUrl,
+            @RequestParam(required = false) String jobPostingText,
+            @RequestPart(name = "jobPostingImage", required = false) MultipartFile jobPostingImage,
+            @RequestPart(name = "file", required = false) MultipartFile file,
+            @RequestPart(name = "resumePdf", required = false) MultipartFile resumePdf
+    ) {
+        MultipartFile selectedResumePdf = file != null ? file : resumePdf;
+        AnalysisDetailResponse response = analysisService.createAnalysis(
+                principal.getUserId(),
+                jobPostingUrl,
+                jobPostingText,
+                jobPostingImage,
+                selectedResumePdf
+        );
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
 
     @PatchMapping("/{analysisResultId}/resume")
     @SecurityRequirement(name = JWT_SECURITY_SCHEME_NAME)

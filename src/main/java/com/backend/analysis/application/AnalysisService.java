@@ -58,26 +58,35 @@ public class AnalysisService {
     private final RequirementEvaluationRepository requirementEvaluationRepository;
 
     @Transactional(readOnly = true)
-    public AnalysisPageResponse<AnalysisSummaryResponse> searchAnalysesByCompanyName(
+    public AnalysisPageResponse<AnalysisSummaryResponse> getAnalyses(
             Long userId,
-            String companyName,
             int page,
-            int size
+            int size,
+            String companyName
     ) {
-        validateCompanySearchRequest(companyName, page, size);
+        validatePageRequest(page, size);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        Page<AnalysisSummaryResponse> summaries = analysisResultRepository
-                .findAllByUserAndDeletedAtIsNullAndJobDescription_CompanyNameContainingIgnoreCaseOrderByCreatedAtDesc(
-                        user,
-                        companyName.trim(),
-                        PageRequest.of(page, size)
-                )
-                .map(AnalysisSummaryResponse::from);
+        PageRequest pageRequest = PageRequest.of(page, size);
+        Page<AnalysisResult> analysisResults;
 
-        return AnalysisPageResponse.from(summaries);
+        if (companyName == null || companyName.isBlank()) {
+            analysisResults = analysisResultRepository.findAllByUserAndDeletedAtIsNullOrderByCreatedAtDesc(
+                    user,
+                    pageRequest
+            );
+        } else {
+            analysisResults = analysisResultRepository
+                    .findAllByUserAndDeletedAtIsNullAndJobDescription_CompanyNameContainingIgnoreCaseOrderByCreatedAtDesc(
+                            user,
+                            companyName.trim(),
+                            pageRequest
+                    );
+        }
+
+        return AnalysisPageResponse.from(analysisResults.map(AnalysisSummaryResponse::from));
     }
 
     @Transactional
@@ -194,11 +203,7 @@ public class AnalysisService {
         return analysisResult;
     }
 
-    private void validateCompanySearchRequest(String companyName, int page, int size) {
-        if (companyName == null || companyName.isBlank()) {
-            throw new CustomException(ErrorCode.COMPANY_NAME_REQUIRED);
-        }
-
+    private void validatePageRequest(int page, int size) {
         if (page < 0 || size <= 0) {
             throw new CustomException(ErrorCode.INVALID_PAGE_REQUEST);
         }

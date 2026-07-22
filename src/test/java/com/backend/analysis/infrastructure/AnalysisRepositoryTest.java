@@ -198,8 +198,48 @@ class AnalysisRepositoryTest {
     }
 
     @Test
-    @DisplayName("회사명으로 로그인 사용자의 분석 결과를 검색하고 삭제된 결과는 제외한다")
-    void searchAnalysisResultsByCompanyName() {
+    @DisplayName("로그인 사용자의 분석 결과 목록을 페이지네이션으로 조회하고 삭제된 결과는 제외한다")
+    void findAnalysisResultsWithPagination() {
+        // given
+        String unique = String.valueOf(System.currentTimeMillis());
+
+        User user = userRepository.save(User.createSocialUser(
+                "list" + unique + "@example.com",
+                Provider.GOOGLE,
+                "google-list-" + unique,
+                "목록테스트유저"
+        ));
+        User otherUser = userRepository.save(User.createSocialUser(
+                "other-list" + unique + "@example.com",
+                Provider.KAKAO,
+                "kakao-list-" + unique,
+                "다른유저"
+        ));
+
+        AnalysisResult kakao = saveAnalysisResult(user, "카카오", "백엔드 개발자");
+        AnalysisResult naver = saveAnalysisResult(user, "네이버", "서버 개발자");
+        saveAnalysisResult(otherUser, "라인", "백엔드 개발자");
+
+        AnalysisResult deleted = saveAnalysisResult(user, "삭제회사", "백엔드 개발자");
+        deleted.delete(LocalDateTime.now());
+        analysisResultRepository.flush();
+
+        // when
+        Page<AnalysisResult> results = analysisResultRepository.findAllByUserAndDeletedAtIsNullOrderByCreatedAtDesc(
+                user,
+                PageRequest.of(0, 10)
+        );
+
+        // then
+        assertThat(results.getTotalElements()).isEqualTo(2);
+        assertThat(results.getContent())
+                .extracting(AnalysisResult::getId)
+                .containsExactlyInAnyOrder(kakao.getId(), naver.getId());
+    }
+
+    @Test
+    @DisplayName("회사명이 있으면 로그인 사용자의 분석 결과 목록을 회사명으로 필터링한다")
+    void findAnalysisResultsByCompanyNameWithPagination() {
         // given
         String unique = String.valueOf(System.currentTimeMillis());
 
@@ -210,9 +250,9 @@ class AnalysisRepositoryTest {
                 "검색테스트유저"
         ));
         User otherUser = userRepository.save(User.createSocialUser(
-                "other" + unique + "@example.com",
+                "other-search" + unique + "@example.com",
                 Provider.KAKAO,
-                "kakao-other-" + unique,
+                "kakao-search-" + unique,
                 "다른유저"
         ));
 

@@ -40,17 +40,17 @@ public class AnalysisController {
 
     @GetMapping
     @SecurityRequirement(name = JWT_SECURITY_SCHEME_NAME)
-    public ResponseEntity<ApiResponse<AnalysisPageResponse<AnalysisSummaryResponse>>> searchAnalysesByCompanyName(
+    public ResponseEntity<ApiResponse<AnalysisPageResponse<AnalysisSummaryResponse>>> getAnalyses(
             @AuthenticationPrincipal UserPrincipal principal,
-            @RequestParam(required = false) String companyName,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String companyName
     ) {
-        AnalysisPageResponse<AnalysisSummaryResponse> response = analysisService.searchAnalysesByCompanyName(
+        AnalysisPageResponse<AnalysisSummaryResponse> response = analysisService.getAnalyses(
                 principal.getUserId(),
-                companyName,
                 page,
-                size
+                size,
+                companyName
         );
 
         return ResponseEntity.ok(ApiResponse.success(response));

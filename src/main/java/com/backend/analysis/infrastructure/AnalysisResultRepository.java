@@ -15,6 +15,9 @@ public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, 
     List<AnalysisResult> findAllByUserAndDeletedAtIsNullOrderByCreatedAtDesc(User user);
 
     @EntityGraph(attributePaths = "jobDescription")
+    Page<AnalysisResult> findAllByUserAndDeletedAtIsNullOrderByCreatedAtDesc(User user, Pageable pageable);
+
+    @EntityGraph(attributePaths = "jobDescription")
     Page<AnalysisResult> findAllByUserAndDeletedAtIsNullAndJobDescription_CompanyNameContainingIgnoreCaseOrderByCreatedAtDesc(
             User user,
             String companyName,

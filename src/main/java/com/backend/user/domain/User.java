@@ -7,6 +7,9 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+import java.util.Objects;
+
 @Getter
 @Entity
 @Table(
@@ -36,6 +39,18 @@ public class User extends BaseCreatedTimeEntity {
     @Column(length = 50)
     private String name;
 
+    @Column(name = "terms_agreed_at")
+    private LocalDateTime termsAgreedAt;
+
+    @Column(name = "privacy_agreed_at")
+    private LocalDateTime privacyAgreedAt;
+
+    @Column(name = "terms_version", length = 20)
+    private String termsVersion;
+
+    @Column(name = "privacy_version", length = 20)
+    private String privacyVersion;
+
     @Builder
     private User(String email, Provider provider, String providerId, String name) {
         this.email = email;
@@ -51,5 +66,19 @@ public class User extends BaseCreatedTimeEntity {
                 .providerId(providerId)
                 .name(name)
                 .build();
+    }
+
+    public boolean isTermsRequired(String currentTermsVersion, String currentPrivacyVersion) {
+        return termsAgreedAt == null
+                || privacyAgreedAt == null
+                || !Objects.equals(termsVersion, currentTermsVersion)
+                || !Objects.equals(privacyVersion, currentPrivacyVersion);
+    }
+
+    public void agreeTerms(LocalDateTime agreedAt, String termsVersion, String privacyVersion) {
+        this.termsAgreedAt = agreedAt;
+        this.privacyAgreedAt = agreedAt;
+        this.termsVersion = termsVersion;
+        this.privacyVersion = privacyVersion;
     }
 }

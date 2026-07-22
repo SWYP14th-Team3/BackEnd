@@ -13,6 +13,7 @@ import com.backend.analysis.domain.UserResume;
 import com.backend.user.domain.Provider;
 import com.backend.user.domain.User;
 import com.backend.user.infrastructure.UserRepository;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,6 +51,9 @@ class AnalysisRepositoryTest {
 
     @Autowired
     private RequirementEvaluationRepository requirementEvaluationRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Test
     @DisplayName("유저, 분석 결과, 공고 요건, 요건별 평가 결과를 저장하고 조회할 수 있다")
@@ -281,6 +285,76 @@ class AnalysisRepositoryTest {
         assertThat(results.getContent())
                 .extracting(result -> result.getJobDescription().getCompanyName())
                 .containsExactlyInAnyOrder("카카오뱅크", "카카오페이");
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 시 로그인 사용자의 분석 관련 데이터를 모두 hard delete 할 수 있다")
+    void deleteAllAnalysisDataByUserIdForWithdrawal() {
+        // given
+        String unique = String.valueOf(System.currentTimeMillis());
+
+        User user = userRepository.save(User.createSocialUser(
+                "withdrawal" + unique + "@example.com",
+                Provider.GOOGLE,
+                "google-withdrawal-" + unique,
+                "탈퇴테스트유저"
+        ));
+        User otherUser = userRepository.save(User.createSocialUser(
+                "other-withdrawal" + unique + "@example.com",
+                Provider.KAKAO,
+                "kakao-withdrawal-" + unique,
+                "다른유저"
+        ));
+
+        AnalysisResult analysisResult = saveAnalysisResult(user, "탈퇴회사", "백엔드 개발자");
+        AnalysisResult otherAnalysisResult = saveAnalysisResult(otherUser, "유지회사", "서버 개발자");
+
+        JobRequirement requirement = jobRequirementRepository.save(JobRequirement.builder()
+                .analysisResult(analysisResult)
+                .category(RequirementCategory.WORK_COMPETENCY)
+                .title("Spring Boot 개발 경험")
+                .description("Spring Boot 개발 경험이 필요합니다.")
+                .sourceText("Spring Boot 개발 경험")
+                .build());
+        jobRequirementRepository.save(JobRequirement.builder()
+                .analysisResult(otherAnalysisResult)
+                .category(RequirementCategory.WORK_COMPETENCY)
+                .title("JPA 개발 경험")
+                .description("JPA 개발 경험이 필요합니다.")
+                .sourceText("JPA 개발 경험")
+                .build());
+
+        requirementEvaluationRepository.save(RequirementEvaluation.builder()
+                .jobRequirement(requirement)
+                .matchStatus(MatchStatus.NEEDS_IMPROVEMENT)
+                .resumeEvidence("Spring Boot 경험 일부 확인")
+                .feedback("구체적인 역할이 부족합니다.")
+                .revisionSuggestion("구현한 API를 구체적으로 작성하세요.")
+                .build());
+
+        Long userId = user.getId();
+        Long otherUserId = otherUser.getId();
+        entityManager.flush();
+        entityManager.clear();
+
+        // when
+        requirementEvaluationRepository.deleteAllByUserId(userId);
+        jobRequirementRepository.deleteAllByUserId(userId);
+        analysisResultRepository.deleteAllByUserId(userId);
+        userResumeRepository.deleteAllByUserId(userId);
+        jobDescriptionRepository.deleteAllByUserId(userId);
+        userRepository.deleteById(userId);
+        userRepository.flush();
+        entityManager.clear();
+
+        // then
+        assertThat(userRepository.existsById(userId)).isFalse();
+        assertThat(analysisResultRepository.findAll())
+                .extracting(result -> result.getUser().getId())
+                .containsExactly(otherUserId);
+        assertThat(jobRequirementRepository.findAll()).hasSize(1);
+        assertThat(userResumeRepository.findAll()).hasSize(1);
+        assertThat(jobDescriptionRepository.findAll()).hasSize(1);
     }
 
     private AnalysisResult saveAnalysisResult(User user, String companyName, String positionTitle) {

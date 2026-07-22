@@ -14,13 +14,23 @@ public class LoginResponse {
     private String accessToken;
     private String refreshToken;
     private String tokenType;
+    private Boolean isNewUser;
+    private Boolean termsRequired;
     private UserResponse user;
 
-    public static LoginResponse of(String accessToken, String refreshToken, User user) {
+    public static LoginResponse of(
+            String accessToken,
+            String refreshToken,
+            Boolean isNewUser,
+            Boolean termsRequired,
+            User user
+    ) {
         return LoginResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
+                .isNewUser(isNewUser)
+                .termsRequired(termsRequired)
                 .user(UserResponse.from(user))
                 .build();
     }

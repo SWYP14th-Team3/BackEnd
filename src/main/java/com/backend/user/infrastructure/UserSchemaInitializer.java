@@ -19,14 +19,29 @@ public class UserSchemaInitializer implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         try {
-            if (!isMysqlDatabase() || !isUsersEmailRequired()) {
+            if (!isMysqlDatabase()) {
                 return;
             }
 
-            jdbcTemplate.execute("ALTER TABLE users MODIFY COLUMN email VARCHAR(100) NULL");
+            if (isUsersEmailRequired()) {
+                jdbcTemplate.execute("ALTER TABLE users MODIFY COLUMN email VARCHAR(100) NULL");
+            }
+
+            addColumnIfMissing("terms_agreed_at", "DATETIME(6) NULL");
+            addColumnIfMissing("privacy_agreed_at", "DATETIME(6) NULL");
+            addColumnIfMissing("terms_version", "VARCHAR(20) NULL");
+            addColumnIfMissing("privacy_version", "VARCHAR(20) NULL");
         } catch (DataAccessException exception) {
-            log.warn("users.email 컬럼 nullable 보정에 실패했습니다.", exception);
+            log.warn("users 테이블 스키마 보정에 실패했습니다.", exception);
         }
+    }
+
+    private void addColumnIfMissing(String columnName, String columnDefinition) {
+        if (!isColumnMissing(columnName)) {
+            return;
+        }
+
+        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN " + columnName + " " + columnDefinition);
     }
 
     private boolean isMysqlDatabase() {
@@ -51,5 +66,21 @@ public class UserSchemaInitializer implements ApplicationRunner {
         );
 
         return count != null && count > 0;
+    }
+
+    private boolean isColumnMissing(String columnName) {
+        Integer count = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'users'
+                  AND COLUMN_NAME = ?
+                """,
+                Integer.class,
+                columnName
+        );
+
+        return count == null || count == 0;
     }
 }

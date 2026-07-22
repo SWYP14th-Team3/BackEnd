@@ -57,6 +57,7 @@ public class SecurityConfig {
                         // Auth - required login
                         .requestMatchers(
                                 "/api/auth/me",
+                                "/api/auth/agreements",
                                 "/api/auth/logout"
                         ).authenticated()
 

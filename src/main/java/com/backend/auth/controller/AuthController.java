@@ -1,8 +1,10 @@
 package com.backend.auth.controller;
 
 import com.backend.auth.application.AuthService;
+import com.backend.auth.dto.request.AgreementRequest;
 import com.backend.auth.dto.request.LogoutRequest;
 import com.backend.auth.dto.request.SocialLoginRequest;
+import com.backend.auth.dto.response.AgreementResponse;
 import com.backend.auth.dto.response.LoginResponse;
 import com.backend.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -57,6 +59,27 @@ public class AuthController {
             @AuthenticationPrincipal UserPrincipal principal
     ) {
         AuthMeResponse response = authService.getMe(principal.getUserId());
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @DeleteMapping("/me")
+    @SecurityRequirement(name = JWT_SECURITY_SCHEME_NAME)
+    public ResponseEntity<ApiResponse<Void>> deleteMe(
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        authService.deleteMe(principal.getUserId());
+
+        return ResponseEntity.ok(ApiResponse.success());
+    }
+
+    @PostMapping("/agreements")
+    @SecurityRequirement(name = JWT_SECURITY_SCHEME_NAME)
+    public ResponseEntity<ApiResponse<AgreementResponse>> agreeTerms(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody AgreementRequest request
+    ) {
+        AgreementResponse response = authService.agreeTerms(principal.getUserId());
 
         return ResponseEntity.ok(ApiResponse.success(response));
     }

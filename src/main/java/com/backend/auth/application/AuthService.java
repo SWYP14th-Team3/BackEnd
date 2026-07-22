@@ -1,5 +1,11 @@
 package com.backend.auth.application;
 
+import com.backend.analysis.infrastructure.AnalysisResultRepository;
+import com.backend.analysis.infrastructure.JobDescriptionRepository;
+import com.backend.analysis.infrastructure.JobRequirementRepository;
+import com.backend.analysis.infrastructure.RequirementEvaluationRepository;
+import com.backend.analysis.infrastructure.UserResumeRepository;
+import com.backend.auth.dto.response.AgreementResponse;
 import com.backend.auth.dto.response.AuthMeResponse;
 import com.backend.auth.dto.response.LoginResponse;
 import com.backend.auth.dto.response.SocialUserInfo;
@@ -16,22 +22,32 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
+    private static final String CURRENT_TERMS_VERSION = "v1";
+    private static final String CURRENT_PRIVACY_VERSION = "v1";
+
     private final List<OAuthClient> oAuthClients;
     private final UserRepository userRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final RequirementEvaluationRepository requirementEvaluationRepository;
+    private final JobRequirementRepository jobRequirementRepository;
+    private final AnalysisResultRepository analysisResultRepository;
+    private final UserResumeRepository userResumeRepository;
+    private final JobDescriptionRepository jobDescriptionRepository;
 
     @Transactional
     public LoginResponse socialLogin(Provider provider, String authorizationCode) {
         SocialUserInfo socialUserInfo = getSocialUserInfo(provider, authorizationCode);
 
-        User user = findOrCreateUser(socialUserInfo);
+        LoginUser loginUser = findOrCreateUser(socialUserInfo);
+        User user = loginUser.user();
 
         String accessToken = jwtTokenProvider.createAccessToken(user);
         String refreshToken = jwtTokenProvider.createRefreshToken(user);
@@ -42,7 +58,13 @@ public class AuthService {
                 jwtTokenProvider.getRefreshTokenExpiration()
         );
 
-        return LoginResponse.of(accessToken, refreshToken, user);
+        return LoginResponse.of(
+                accessToken,
+                refreshToken,
+                loginUser.isNewUser(),
+                user.isTermsRequired(CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION),
+                user
+        );
     }
 
     private SocialUserInfo getSocialUserInfo(Provider provider, String authorizationCode) {
@@ -54,12 +76,13 @@ public class AuthService {
         return oAuthClient.getUserInfo(authorizationCode);
     }
 
-    private User findOrCreateUser(SocialUserInfo socialUserInfo) {
+    private LoginUser findOrCreateUser(SocialUserInfo socialUserInfo) {
         return userRepository.findByProviderAndProviderId(
                         socialUserInfo.getProvider(),
                         socialUserInfo.getProviderId()
                 )
-                .orElseGet(() -> createNewUser(socialUserInfo));
+                .map(user -> new LoginUser(user, false))
+                .orElseGet(() -> new LoginUser(createNewUser(socialUserInfo), true));
     }
 
     private User createNewUser(SocialUserInfo socialUserInfo) {
@@ -78,12 +101,49 @@ public class AuthService {
         return userRepository.save(user);
     }
 
+    private record LoginUser(
+            User user,
+            boolean isNewUser
+    ) {
+    }
+
     @Transactional(readOnly = true)
     public AuthMeResponse getMe(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        return AuthMeResponse.from(user);
+        return AuthMeResponse.from(
+                user,
+                user.isTermsRequired(CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION)
+        );
+    }
+
+    @Transactional
+    public void deleteMe(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        refreshTokenRepository.deleteByUserId(userId);
+        requirementEvaluationRepository.deleteAllByUserId(userId);
+        jobRequirementRepository.deleteAllByUserId(userId);
+        analysisResultRepository.deleteAllByUserId(userId);
+        userResumeRepository.deleteAllByUserId(userId);
+        jobDescriptionRepository.deleteAllByUserId(userId);
+        userRepository.delete(user);
+    }
+
+    @Transactional
+    public AgreementResponse agreeTerms(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        user.agreeTerms(
+                LocalDateTime.now(),
+                CURRENT_TERMS_VERSION,
+                CURRENT_PRIVACY_VERSION
+        );
+
+        return AgreementResponse.from(user);
     }
 
     @Transactional

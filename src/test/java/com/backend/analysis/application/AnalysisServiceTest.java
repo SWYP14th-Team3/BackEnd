@@ -1,5 +1,6 @@
 package com.backend.analysis.application;
 
+import com.backend.analysis.domain.JobInputType;
 import com.backend.global.exception.CustomException;
 import com.backend.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -65,5 +66,64 @@ class AnalysisServiceTest {
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_PDF_FILE);
+    }
+
+    @Test
+    @DisplayName("URL 입력 방식은 jobUrl만 허용한다")
+    void validateJobPostingInputAcceptsOnlyJobUrlForUrlType() {
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.URL,
+                "https://company.com/jobs/123",
+                null
+        ));
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.URL,
+                "https://company.com/jobs/123",
+                "직접 입력 공고 텍스트"
+        ))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+    }
+
+    @Test
+    @DisplayName("TEXT 입력 방식은 jobText만 허용하고 길이 조건을 검증한다")
+    void validateJobPostingInputAcceptsOnlyJobTextForTextType() {
+        String validJobText = "a".repeat(100);
+
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.TEXT,
+                null,
+                validJobText
+        ));
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.TEXT,
+                "https://company.com/jobs/123",
+                validJobText
+        ))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.TEXT,
+                null,
+                "a".repeat(99)
+        ))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
     }
 }

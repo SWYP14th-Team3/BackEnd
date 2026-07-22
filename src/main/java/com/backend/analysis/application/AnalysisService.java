@@ -101,20 +101,20 @@ public class AnalysisService {
     @Transactional
     public AnalysisDetailResponse createAnalysis(
             Long userId,
-            String jobPostingUrl,
-            String jobPostingText,
-            MultipartFile jobPostingImage,
-            MultipartFile resumePdf
+            JobInputType jobInputType,
+            String jobUrl,
+            String jobText,
+            MultipartFile resumeFile
     ) {
-        validatePdf(resumePdf);
-        validateJobPostingInput(jobPostingUrl, jobPostingText, jobPostingImage);
+        validatePdf(resumeFile);
+        validateJobPostingInput(jobInputType, jobUrl, jobText);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         GeminiResumeResponse resumeResponse = geminiAnalysisClient.summarizeResume(
-                resumePdf,
-                buildResumePrompt(resumePdf.getOriginalFilename())
+                resumeFile,
+                buildResumePrompt(resumeFile.getOriginalFilename())
         );
         UserResume resume = userResumeRepository.save(
                 UserResume.builder()
@@ -122,16 +122,16 @@ public class AnalysisService {
                         .resumeContent(resumeResponse.resumeContent())
                         .resumeFileName(defaultIfBlank(
                                 resumeResponse.resumeFileName(),
-                                buildResumeFileName(resumePdf.getOriginalFilename())
+                                buildResumeFileName(resumeFile.getOriginalFilename())
                         ))
                         .build()
         );
 
-        String crawledText = crawlJobPostingText(jobPostingUrl, jobPostingText);
-        String platform = jobPostingCrawler.extractPlatform(jobPostingUrl);
+        String crawledText = crawlJobPostingText(jobInputType, jobUrl, jobText);
+        String platform = jobPostingCrawler.extractPlatform(jobUrl);
         GeminiJobDescriptionResponse jobDescriptionResponse = geminiAnalysisClient.summarizeJobDescription(
-                buildJobDescriptionPrompt(jobPostingUrl, crawledText, platform),
-                jobPostingImage
+                buildJobDescriptionPrompt(jobUrl, crawledText, platform),
+                null
         );
         JobDescription jobDescription = jobDescriptionRepository.save(
                 JobDescription.builder()
@@ -166,8 +166,7 @@ public class AnalysisService {
                 analysisResponse.requirements()
         );
 
-        JobInputType jobInputType = hasText(jobPostingUrl) ? JobInputType.URL : JobInputType.TEXT;
-        String jobUrl = jobInputType == JobInputType.URL ? jobPostingUrl.trim() : null;
+        String responseJobUrl = jobInputType == JobInputType.URL ? jobUrl.trim() : null;
         String jobPostingRaw = defaultIfBlank(crawledText, jobDescription.getJdContent());
         String resumeOriginalText = resume.getResumeContent();
 
@@ -175,7 +174,7 @@ public class AnalysisService {
                 analysisResult,
                 requirements,
                 jobInputType,
-                jobUrl,
+                responseJobUrl,
                 jobPostingRaw,
                 resumeOriginalText
         );
@@ -320,17 +319,34 @@ public class AnalysisService {
     }
 
     private void validateJobPostingInput(
-            String jobPostingUrl,
-            String jobPostingText,
-            MultipartFile jobPostingImage
+            JobInputType jobInputType,
+            String jobUrl,
+            String jobText
     ) {
-        boolean hasUrl = hasText(jobPostingUrl);
-        boolean hasText = hasText(jobPostingText);
-        boolean hasImage = jobPostingImage != null && !jobPostingImage.isEmpty();
-
-        if (!hasUrl && !hasText && !hasImage) {
+        if (jobInputType == null) {
             throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
         }
+
+        boolean hasUrl = hasText(jobUrl);
+        boolean hasJobText = hasText(jobText);
+
+        if (jobInputType == JobInputType.URL) {
+            if (!hasUrl || hasJobText || !isHttpUrl(jobUrl)) {
+                throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+            }
+
+            return;
+        }
+
+        if (jobInputType == JobInputType.TEXT) {
+            if (hasUrl || !hasJobText || !isValidJobTextLength(jobText)) {
+                throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+            }
+
+            return;
+        }
+
+        throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
     }
 
     private void validateAnalysisResponse(GeminiAnalysisResponse analysisResponse) {
@@ -341,16 +357,22 @@ public class AnalysisService {
         }
     }
 
-    private String crawlJobPostingText(String jobPostingUrl, String jobPostingText) {
-        if (jobPostingText != null && !jobPostingText.isBlank()) {
-            return jobPostingText.trim();
+    private String crawlJobPostingText(JobInputType jobInputType, String jobUrl, String jobText) {
+        if (jobInputType == JobInputType.TEXT) {
+            return jobText.trim();
         }
 
-        if (jobPostingUrl != null && !jobPostingUrl.isBlank()) {
-            return jobPostingCrawler.extractText(jobPostingUrl.trim());
-        }
+        return jobPostingCrawler.extractText(jobUrl.trim());
+    }
 
-        return "";
+    private boolean isHttpUrl(String url) {
+        String trimmed = url.trim();
+        return trimmed.startsWith("http://") || trimmed.startsWith("https://");
+    }
+
+    private boolean isValidJobTextLength(String jobText) {
+        int length = jobText.trim().length();
+        return length >= 100 && length < 6000;
     }
 
     private CountResult countStatus(List<GeminiRequirementResult> requirements) {

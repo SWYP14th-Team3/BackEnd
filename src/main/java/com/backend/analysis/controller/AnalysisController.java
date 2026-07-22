@@ -1,6 +1,7 @@
 package com.backend.analysis.controller;
 
 import com.backend.analysis.application.AnalysisService;
+import com.backend.analysis.domain.JobInputType;
 import com.backend.analysis.dto.request.AnalysisResumeSaveRequest;
 import com.backend.analysis.dto.request.AnalysisSatisfactionRequest;
 import com.backend.analysis.dto.response.AnalysisDeleteResponse;
@@ -29,11 +30,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.multipart.MultipartHttpServletRequest;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
 
 import static com.backend.global.config.OpenApiConfig.JWT_SECURITY_SCHEME_NAME;
 
@@ -67,87 +63,20 @@ public class AnalysisController {
     @SecurityRequirement(name = JWT_SECURITY_SCHEME_NAME)
     public ResponseEntity<ApiResponse<AnalysisDetailResponse>> createAnalysis(
             @AuthenticationPrincipal UserPrincipal principal,
-            @RequestParam(required = false) String jobPostingUrl,
-            @RequestParam(required = false) String jobPostingText,
-            @RequestPart(name = "jobPostingImage", required = false) MultipartFile jobPostingImage,
-            @RequestPart(name = "file", required = false) MultipartFile file,
-            @RequestPart(name = "resumePdf", required = false) MultipartFile resumePdf,
-            MultipartHttpServletRequest multipartRequest
+            @RequestPart(name = "resumeFile", required = false) MultipartFile resumeFile,
+            @RequestParam(required = false) JobInputType jobInputType,
+            @RequestParam(required = false) String jobUrl,
+            @RequestParam(required = false) String jobText
     ) {
-        MultipartFile selectedResumePdf = selectResumePdf(file, resumePdf, multipartRequest);
         AnalysisDetailResponse response = analysisService.createAnalysis(
                 principal.getUserId(),
-                jobPostingUrl,
-                jobPostingText,
-                jobPostingImage,
-                selectedResumePdf
+                jobInputType,
+                jobUrl,
+                jobText,
+                resumeFile
         );
 
         return ResponseEntity.ok(ApiResponse.success(response));
-    }
-
-    private MultipartFile selectResumePdf(
-            MultipartFile file,
-            MultipartFile resumePdf,
-            MultipartHttpServletRequest multipartRequest
-    ) {
-        if (hasContent(file)) {
-            return file;
-        }
-
-        if (hasContent(resumePdf)) {
-            return resumePdf;
-        }
-
-        List<String> fileParts = describeFileParts(multipartRequest);
-        if (fileParts.isEmpty()) {
-            log.warn("Analysis upload received no multipart file parts");
-        } else {
-            log.warn("Analysis upload received multipart file parts: {}", fileParts);
-        }
-
-        for (MultipartFile multipartFile : multipartRequest.getFileMap().values()) {
-            if (hasContent(multipartFile) && isResumePdfCandidate(multipartFile)) {
-                return multipartFile;
-            }
-        }
-
-        if (file != null) {
-            return file;
-        }
-
-        return resumePdf;
-    }
-
-    private boolean hasContent(MultipartFile multipartFile) {
-        return multipartFile != null && !multipartFile.isEmpty();
-    }
-
-    private boolean isResumePdfCandidate(MultipartFile multipartFile) {
-        if ("jobPostingImage".equals(multipartFile.getName())) {
-            return false;
-        }
-
-        String originalFilename = multipartFile.getOriginalFilename();
-        String contentType = multipartFile.getContentType();
-
-        return (originalFilename != null && originalFilename.toLowerCase(Locale.ROOT).endsWith(".pdf"))
-                || MediaType.APPLICATION_PDF_VALUE.equals(contentType);
-    }
-
-    private List<String> describeFileParts(MultipartHttpServletRequest multipartRequest) {
-        List<String> fileParts = new ArrayList<>();
-
-        multipartRequest.getFileMap().forEach((partName, multipartFile) ->
-                fileParts.add("%s(originalFilename=%s, contentType=%s, size=%d)".formatted(
-                        partName,
-                        multipartFile.getOriginalFilename(),
-                        multipartFile.getContentType(),
-                        multipartFile.getSize()
-                ))
-        );
-
-        return fileParts;
     }
 
     @PatchMapping("/{analysisResultId}/resume")

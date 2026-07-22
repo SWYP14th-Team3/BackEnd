@@ -18,6 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
@@ -193,5 +195,117 @@ class AnalysisRepositoryTest {
         // then
         assertThat(analysisResults).isEmpty();
         assertThat(savedAnalysisResult.getDeletedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("로그인 사용자의 분석 결과 목록을 페이지네이션으로 조회하고 삭제된 결과는 제외한다")
+    void findAnalysisResultsWithPagination() {
+        // given
+        String unique = String.valueOf(System.currentTimeMillis());
+
+        User user = userRepository.save(User.createSocialUser(
+                "list" + unique + "@example.com",
+                Provider.GOOGLE,
+                "google-list-" + unique,
+                "목록테스트유저"
+        ));
+        User otherUser = userRepository.save(User.createSocialUser(
+                "other-list" + unique + "@example.com",
+                Provider.KAKAO,
+                "kakao-list-" + unique,
+                "다른유저"
+        ));
+
+        AnalysisResult kakao = saveAnalysisResult(user, "카카오", "백엔드 개발자");
+        AnalysisResult naver = saveAnalysisResult(user, "네이버", "서버 개발자");
+        saveAnalysisResult(otherUser, "라인", "백엔드 개발자");
+
+        AnalysisResult deleted = saveAnalysisResult(user, "삭제회사", "백엔드 개발자");
+        deleted.delete(LocalDateTime.now());
+        analysisResultRepository.flush();
+
+        // when
+        Page<AnalysisResult> results = analysisResultRepository.findAllByUserAndDeletedAtIsNullOrderByCreatedAtDesc(
+                user,
+                PageRequest.of(0, 10)
+        );
+
+        // then
+        assertThat(results.getTotalElements()).isEqualTo(2);
+        assertThat(results.getContent())
+                .extracting(AnalysisResult::getId)
+                .containsExactlyInAnyOrder(kakao.getId(), naver.getId());
+    }
+
+    @Test
+    @DisplayName("회사명이 있으면 로그인 사용자의 분석 결과 목록을 회사명으로 필터링한다")
+    void findAnalysisResultsByCompanyNameWithPagination() {
+        // given
+        String unique = String.valueOf(System.currentTimeMillis());
+
+        User user = userRepository.save(User.createSocialUser(
+                "search" + unique + "@example.com",
+                Provider.GOOGLE,
+                "google-search-" + unique,
+                "검색테스트유저"
+        ));
+        User otherUser = userRepository.save(User.createSocialUser(
+                "other-search" + unique + "@example.com",
+                Provider.KAKAO,
+                "kakao-search-" + unique,
+                "다른유저"
+        ));
+
+        AnalysisResult kakaoBank = saveAnalysisResult(user, "카카오뱅크", "백엔드 개발자");
+        AnalysisResult kakaoPay = saveAnalysisResult(user, "카카오페이", "서버 개발자");
+        saveAnalysisResult(user, "네이버", "백엔드 개발자");
+        saveAnalysisResult(otherUser, "카카오엔터프라이즈", "백엔드 개발자");
+
+        AnalysisResult deletedKakao = saveAnalysisResult(user, "카카오스타일", "백엔드 개발자");
+        deletedKakao.delete(LocalDateTime.now());
+        analysisResultRepository.flush();
+
+        // when
+        Page<AnalysisResult> results = analysisResultRepository
+                .findAllByUserAndDeletedAtIsNullAndJobDescription_CompanyNameContainingIgnoreCaseOrderByCreatedAtDesc(
+                        user,
+                        "카카오",
+                        PageRequest.of(0, 10)
+                );
+
+        // then
+        assertThat(results.getTotalElements()).isEqualTo(2);
+        assertThat(results.getContent())
+                .extracting(AnalysisResult::getId)
+                .containsExactlyInAnyOrder(kakaoBank.getId(), kakaoPay.getId());
+        assertThat(results.getContent())
+                .extracting(result -> result.getJobDescription().getCompanyName())
+                .containsExactlyInAnyOrder("카카오뱅크", "카카오페이");
+    }
+
+    private AnalysisResult saveAnalysisResult(User user, String companyName, String positionTitle) {
+        UserResume resume = userResumeRepository.save(UserResume.builder()
+                .user(user)
+                .resumeContent("이력서 내용")
+                .resumeFileName("resume.md")
+                .build());
+
+        JobDescription jobDescription = jobDescriptionRepository.save(JobDescription.builder()
+                .user(user)
+                .companyName(companyName)
+                .positionTitle(positionTitle)
+                .jobPlatform("직접 입력")
+                .jdContent("채용공고 내용")
+                .build());
+
+        return analysisResultRepository.save(AnalysisResult.builder()
+                .user(user)
+                .userResume(resume)
+                .jobDescription(jobDescription)
+                .overallLevel(OverallLevel.MEDIUM)
+                .redCount(1)
+                .yellowCount(2)
+                .greenCount(3)
+                .build());
     }
 }

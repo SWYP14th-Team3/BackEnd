@@ -5,8 +5,10 @@ import com.backend.analysis.dto.request.AnalysisResumeSaveRequest;
 import com.backend.analysis.dto.request.AnalysisSatisfactionRequest;
 import com.backend.analysis.dto.response.AnalysisDeleteResponse;
 import com.backend.analysis.dto.response.AnalysisDetailResponse;
+import com.backend.analysis.dto.response.AnalysisPageResponse;
 import com.backend.analysis.dto.response.AnalysisSaveResponse;
 import com.backend.analysis.dto.response.AnalysisSatisfactionResponse;
+import com.backend.analysis.dto.response.AnalysisSummaryResponse;
 import com.backend.global.response.ApiResponse;
 import com.backend.global.security.UserPrincipal;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -16,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,6 +37,24 @@ import static com.backend.global.config.OpenApiConfig.JWT_SECURITY_SCHEME_NAME;
 public class AnalysisController {
 
     private final AnalysisService analysisService;
+
+    @GetMapping
+    @SecurityRequirement(name = JWT_SECURITY_SCHEME_NAME)
+    public ResponseEntity<ApiResponse<AnalysisPageResponse<AnalysisSummaryResponse>>> getAnalyses(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String companyName
+    ) {
+        AnalysisPageResponse<AnalysisSummaryResponse> response = analysisService.getAnalyses(
+                principal.getUserId(),
+                page,
+                size,
+                companyName
+        );
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @SecurityRequirement(name = JWT_SECURITY_SCHEME_NAME)

@@ -16,9 +16,9 @@ import com.backend.analysis.domain.UserResume;
 import com.backend.analysis.dto.GeminiAnalysisResponse;
 import com.backend.analysis.dto.GeminiJobDescriptionResponse;
 import com.backend.analysis.dto.GeminiRequirementResult;
-import com.backend.analysis.dto.GeminiResumeResponse;
 import com.backend.analysis.dto.response.AnalysisDeleteResponse;
 import com.backend.analysis.dto.response.AnalysisDetailResponse;
+import com.backend.analysis.dto.response.AnalysisFinalSaveResponse;
 import com.backend.analysis.dto.response.AnalysisPageResponse;
 import com.backend.analysis.dto.response.AnalysisSaveResponse;
 import com.backend.analysis.dto.response.AnalysisSatisfactionResponse;
@@ -191,10 +191,29 @@ public class AnalysisService {
 
         LocalDateTime savedAt = LocalDateTime.now();
         analysisResult.getUserResume().updateResumeContent(resumeCurrentText, savedAt);
-        analysisResult.markSaved(savedAt);
         analysisResultRepository.flush();
 
         return AnalysisSaveResponse.from(analysisResult);
+    }
+
+    @Transactional
+    public AnalysisFinalSaveResponse finalSaveAnalysis(
+            Long userId,
+            Long analysisResultId,
+            String resumeCurrentText
+    ) {
+        if (!hasText(resumeCurrentText)) {
+            throw new CustomException(ErrorCode.EMPTY_RESUME_CONTENT);
+        }
+
+        AnalysisResult analysisResult = findOwnedAnalysisResult(userId, analysisResultId);
+
+        LocalDateTime savedAt = LocalDateTime.now();
+        analysisResult.getUserResume().updateResumeContent(resumeCurrentText.trim(), savedAt);
+        analysisResult.markSaved(savedAt);
+        analysisResultRepository.flush();
+
+        return AnalysisFinalSaveResponse.from(analysisResult);
     }
 
     @Transactional

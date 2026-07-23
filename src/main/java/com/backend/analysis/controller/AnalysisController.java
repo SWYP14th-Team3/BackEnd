@@ -2,10 +2,12 @@ package com.backend.analysis.controller;
 
 import com.backend.analysis.application.AnalysisService;
 import com.backend.analysis.domain.JobInputType;
+import com.backend.analysis.dto.request.AnalysisFinalSaveRequest;
 import com.backend.analysis.dto.request.AnalysisResumeSaveRequest;
 import com.backend.analysis.dto.request.AnalysisSatisfactionRequest;
 import com.backend.analysis.dto.response.AnalysisDeleteResponse;
 import com.backend.analysis.dto.response.AnalysisDetailResponse;
+import com.backend.analysis.dto.response.AnalysisFinalSaveResponse;
 import com.backend.analysis.dto.response.AnalysisPageResponse;
 import com.backend.analysis.dto.response.AnalysisSaveResponse;
 import com.backend.analysis.dto.response.AnalysisSatisfactionResponse;
@@ -101,6 +103,22 @@ public class AnalysisController {
             @Valid @RequestBody AnalysisResumeSaveRequest request
     ) {
         AnalysisSaveResponse response = analysisService.saveResume(
+                principal.getUserId(),
+                analysisResultId,
+                request.getResumeCurrentText()
+        );
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PatchMapping("/{analysisResultId}/save")
+    @SecurityRequirement(name = JWT_SECURITY_SCHEME_NAME)
+    public ResponseEntity<ApiResponse<AnalysisFinalSaveResponse>> finalSaveAnalysis(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long analysisResultId,
+            @Valid @RequestBody AnalysisFinalSaveRequest request
+    ) {
+        AnalysisFinalSaveResponse response = analysisService.finalSaveAnalysis(
                 principal.getUserId(),
                 analysisResultId,
                 request.getResumeCurrentText()

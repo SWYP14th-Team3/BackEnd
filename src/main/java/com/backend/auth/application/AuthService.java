@@ -2,6 +2,7 @@ package com.backend.auth.application;
 
 import com.backend.analysis.infrastructure.AnalysisResultRepository;
 import com.backend.analysis.infrastructure.JobDescriptionRepository;
+import com.backend.analysis.infrastructure.JobPostingImageRepository;
 import com.backend.analysis.infrastructure.JobRequirementRepository;
 import com.backend.analysis.infrastructure.RequirementEvaluationRepository;
 import com.backend.analysis.infrastructure.UserResumeRepository;
@@ -40,6 +41,7 @@ public class AuthService {
     private final JobRequirementRepository jobRequirementRepository;
     private final AnalysisResultRepository analysisResultRepository;
     private final UserResumeRepository userResumeRepository;
+    private final JobPostingImageRepository jobPostingImageRepository;
     private final JobDescriptionRepository jobDescriptionRepository;
 
     @Transactional
@@ -128,6 +130,7 @@ public class AuthService {
         jobRequirementRepository.deleteAllByUserId(userId);
         analysisResultRepository.deleteAllByUserId(userId);
         userResumeRepository.deleteAllByUserId(userId);
+        jobPostingImageRepository.deleteAllByUserId(userId);
         jobDescriptionRepository.deleteAllByUserId(userId);
         userRepository.delete(user);
     }

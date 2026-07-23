@@ -27,11 +27,11 @@ public class AnalysisResult extends BaseTimeEntity {
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "resume_num", nullable = false)
+    @JoinColumn(name = "resume_id", nullable = false)
     private UserResume userResume;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "jd_num", nullable = false)
+    @JoinColumn(name = "job_description_id", nullable = false)
     private JobDescription jobDescription;
 
     @Enumerated(EnumType.STRING)
@@ -47,6 +47,22 @@ public class AnalysisResult extends BaseTimeEntity {
     @Column(name = "green_count", nullable = false)
     private Integer greenCount;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "previous_overall_level", length = 20)
+    private OverallLevel previousOverallLevel;
+
+    @Column(name = "previous_red_count")
+    private Integer previousRedCount;
+
+    @Column(name = "previous_yellow_count")
+    private Integer previousYellowCount;
+
+    @Column(name = "previous_green_count")
+    private Integer previousGreenCount;
+
+    @Column(name = "last_reanalyzed_at")
+    private LocalDateTime lastReanalyzedAt;
+
     @Column(name = "retry_count", nullable = false)
     private Integer retryCount;
 
@@ -54,8 +70,8 @@ public class AnalysisResult extends BaseTimeEntity {
     @Column(name = "satisfaction", length = 20)
     private Satisfaction satisfaction;
 
-    @Column(name = "last_saved_at")
-    private LocalDateTime lastSavedAt;
+    @Column(name = "final_saved_at")
+    private LocalDateTime finalSavedAt;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
@@ -82,7 +98,11 @@ public class AnalysisResult extends BaseTimeEntity {
     }
 
     public void markSaved(LocalDateTime savedAt) {
-        this.lastSavedAt = savedAt;
+        this.finalSavedAt = savedAt;
+    }
+
+    public LocalDateTime getLastSavedAt() {
+        return finalSavedAt;
     }
 
     public void updateSatisfaction(Satisfaction satisfaction) {

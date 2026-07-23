@@ -35,6 +35,8 @@ public enum ErrorCode {
     COMPANY_NAME_REQUIRED(HttpStatus.BAD_REQUEST, "검색어를 입력해주세요."),
     INVALID_PAGE_REQUEST(HttpStatus.BAD_REQUEST, "잘못된 페이지 요청입니다."),
     INVALID_PDF_FILE(HttpStatus.BAD_REQUEST, "PDF 파일만 업로드할 수 있습니다."),
+    PDF_FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "10MB 이하만 업로드할 수 있습니다."),
+    UNREADABLE_PDF_TEXT(HttpStatus.UNPROCESSABLE_CONTENT, "텍스트를 읽을 수 없는 PDF입니다."),
     GEMINI_API_ERROR(HttpStatus.BAD_GATEWAY, "Gemini API 호출 중 오류가 발생했습니다."),
     JOB_POSTING_CRAWL_ERROR(HttpStatus.BAD_GATEWAY, "채용공고를 불러오는 중 오류가 발생했습니다."),
     GEMINI_RESPONSE_PARSE_ERROR(HttpStatus.BAD_GATEWAY, "Gemini 응답을 해석하는 중 오류가 발생했습니다.");

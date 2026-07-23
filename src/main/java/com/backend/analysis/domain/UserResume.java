@@ -31,14 +31,18 @@ public class UserResume extends BaseTimeEntity {
     @Column(name = "resume_file_name", length = 255)
     private String resumeFileName;
 
+    @Column(name = "resume_file_size")
+    private Long resumeFileSize;
+
     @Column(name = "last_saved_at")
     private LocalDateTime lastSavedAt;
 
     @Builder
-    private UserResume(User user, String resumeContent, String resumeFileName) {
+    private UserResume(User user, String resumeContent, String resumeFileName, Long resumeFileSize) {
         this.user = user;
         this.resumeContent = resumeContent;
         this.resumeFileName = resumeFileName;
+        this.resumeFileSize = resumeFileSize;
     }
 
     public void updateResumeContent(String resumeContent, LocalDateTime savedAt) {

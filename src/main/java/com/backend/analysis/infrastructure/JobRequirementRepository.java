@@ -13,6 +13,8 @@ public interface JobRequirementRepository extends JpaRepository<JobRequirement, 
 
     List<JobRequirement> findAllByAnalysisResultOrderByIdAsc(AnalysisResult analysisResult);
 
+    List<JobRequirement> findAllByAnalysisResultOrderByInputOrderAscIdAsc(AnalysisResult analysisResult);
+
     @Modifying
     @Query("""
             delete from JobRequirement requirement

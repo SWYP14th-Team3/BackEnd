@@ -10,6 +10,7 @@ import com.backend.analysis.domain.MatchStatus;
 import com.backend.analysis.domain.OverallLevel;
 import com.backend.analysis.domain.RequirementCategory;
 import com.backend.analysis.domain.RequirementEvaluation;
+import com.backend.analysis.domain.RequirementType;
 import com.backend.analysis.domain.Satisfaction;
 import com.backend.analysis.domain.UserResume;
 import com.backend.analysis.dto.GeminiAnalysisResponse;
@@ -34,6 +35,9 @@ import com.backend.user.domain.User;
 import com.backend.user.infrastructure.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -56,6 +60,7 @@ public class AnalysisService {
 
     private static final byte[] PDF_HEADER = "%PDF-".getBytes(StandardCharsets.US_ASCII);
     private static final int PDF_HEADER_SCAN_LIMIT = 1024;
+    private static final long MAX_RESUME_PDF_SIZE = 10 * 1024 * 1024;
 
     private final JobPostingCrawler jobPostingCrawler;
     private final GeminiAnalysisClient geminiAnalysisClient;
@@ -98,6 +103,16 @@ public class AnalysisService {
         return AnalysisPageResponse.from(analysisResults.map(AnalysisSummaryResponse::from));
     }
 
+    @Transactional(readOnly = true)
+    public AnalysisDetailResponse getAnalysisDetail(Long userId, Long analysisResultId) {
+        AnalysisResult analysisResult = findOwnedAnalysisResult(userId, analysisResultId);
+
+        return AnalysisDetailResponse.from(
+                analysisResult,
+                getRequirementResponses(analysisResult)
+        );
+    }
+
     @Transactional
     public AnalysisDetailResponse createAnalysis(
             Long userId,
@@ -112,18 +127,13 @@ public class AnalysisService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        GeminiResumeResponse resumeResponse = geminiAnalysisClient.summarizeResume(
-                resumeFile,
-                buildResumePrompt(resumeFile.getOriginalFilename())
-        );
+        String resumeText = extractResumeText(resumeFile);
         UserResume resume = userResumeRepository.save(
                 UserResume.builder()
                         .user(user)
-                        .resumeContent(resumeResponse.resumeContent())
-                        .resumeFileName(defaultIfBlank(
-                                resumeResponse.resumeFileName(),
-                                buildResumeFileName(resumeFile.getOriginalFilename())
-                        ))
+                        .resumeContent(resumeText)
+                        .resumeFileName(buildResumeFileName(resumeFile.getOriginalFilename()))
+                        .resumeFileSize(resumeFile.getSize())
                         .build()
         );
 
@@ -136,10 +146,13 @@ public class AnalysisService {
         JobDescription jobDescription = jobDescriptionRepository.save(
                 JobDescription.builder()
                         .user(user)
+                        .jobInputType(jobInputType)
+                        .jobUrl(jobInputType == JobInputType.URL ? jobUrl.trim() : null)
                         .companyName(jobDescriptionResponse.companyName())
                         .positionTitle(jobDescriptionResponse.positionTitle())
                         .jobPlatform(defaultIfBlank(jobDescriptionResponse.jobPlatform(), platform))
-                        .jdContent(jobDescriptionResponse.jdContent())
+                        .jdOriginalText(crawledText)
+                        .jdSummaryText(jobDescriptionResponse.jdContent())
                         .build()
         );
 
@@ -166,17 +179,9 @@ public class AnalysisService {
                 analysisResponse.requirements()
         );
 
-        String responseJobUrl = jobInputType == JobInputType.URL ? jobUrl.trim() : null;
-        String jobPostingRaw = defaultIfBlank(crawledText, jobDescription.getJdContent());
-        String resumeOriginalText = resume.getResumeContent();
-
         return AnalysisDetailResponse.from(
                 analysisResult,
-                requirements,
-                jobInputType,
-                responseJobUrl,
-                jobPostingRaw,
-                resumeOriginalText
+                requirements
         );
     }
 
@@ -235,15 +240,19 @@ public class AnalysisService {
     ) {
         List<JobRequirementResponse> responses = new ArrayList<>();
 
+        int inputOrder = 0;
         for (GeminiRequirementResult item : requirementResults) {
             MatchStatus matchStatus = parseMatchStatus(item.matchStatus());
+            RequirementCategory category = parseRequirementCategory(item.category());
             JobRequirement requirement = jobRequirementRepository.save(
                     JobRequirement.builder()
                             .analysisResult(analysisResult)
-                            .category(parseRequirementCategory(item.category()))
+                            .requirementType(parseRequirementType(category))
+                            .category(category)
                             .title(defaultIfBlank(item.title(), "요건"))
                             .description(defaultIfBlank(item.description(), item.title()))
-                            .sourceText(item.sourceText())
+                            .jdEvidence(item.sourceText())
+                            .inputOrder(inputOrder++)
                             .build()
             );
 
@@ -251,7 +260,9 @@ public class AnalysisService {
                     RequirementEvaluation.builder()
                             .jobRequirement(requirement)
                             .matchStatus(matchStatus)
+                            .displayTitle(defaultIfBlank(item.title(), "요건"))
                             .resumeEvidence(normalizeEvaluationText(matchStatus, item.resumeEvidence()))
+                            .judgeReason(normalizeEvaluationText(matchStatus, item.resumeEvidence()))
                             .feedback(normalizeEvaluationText(matchStatus, item.feedback()))
                             .revisionSuggestion(normalizeEvaluationText(matchStatus, item.revisionSuggestion()))
                             .build()
@@ -261,6 +272,16 @@ public class AnalysisService {
         }
 
         return responses;
+    }
+
+    private List<JobRequirementResponse> getRequirementResponses(AnalysisResult analysisResult) {
+        return jobRequirementRepository.findAllByAnalysisResultOrderByInputOrderAscIdAsc(analysisResult).stream()
+                .map(requirement -> JobRequirementResponse.from(
+                        requirement,
+                        requirementEvaluationRepository.findByJobRequirement(requirement)
+                                .orElseThrow(() -> new CustomException(ErrorCode.ANALYSIS_RESULT_NOT_FOUND))
+                ))
+                .toList();
     }
 
     private void validatePdf(MultipartFile resumePdf) {
@@ -279,6 +300,16 @@ public class AnalysisService {
             throw new CustomException(ErrorCode.INVALID_PDF_FILE);
         }
 
+        if (resumePdf.getSize() > MAX_RESUME_PDF_SIZE) {
+            log.warn(
+                    "Invalid PDF upload: file is too large, partName={}, contentType={}, size={}",
+                    resumePdf.getName(),
+                    resumePdf.getContentType(),
+                    resumePdf.getSize()
+            );
+            throw new CustomException(ErrorCode.PDF_FILE_TOO_LARGE);
+        }
+
         int pdfHeaderOffset = findPdfHeaderOffset(resumePdf);
         if (pdfHeaderOffset < 0) {
             log.warn(
@@ -289,6 +320,36 @@ public class AnalysisService {
             );
             throw new CustomException(ErrorCode.INVALID_PDF_FILE);
         }
+    }
+
+    private String extractResumeText(MultipartFile resumePdf) {
+        try (PDDocument document = Loader.loadPDF(resumePdf.getBytes())) {
+            PDFTextStripper textStripper = new PDFTextStripper();
+            textStripper.setSortByPosition(true);
+
+            String text = normalizeExtractedPdfText(textStripper.getText(document));
+            if (!hasText(text)) {
+                throw new CustomException(ErrorCode.UNREADABLE_PDF_TEXT);
+            }
+
+            return text;
+        } catch (CustomException e) {
+            throw e;
+        } catch (IOException e) {
+            log.warn("Failed to extract text from resume PDF, partName={}", resumePdf.getName(), e);
+            throw new CustomException(ErrorCode.UNREADABLE_PDF_TEXT);
+        }
+    }
+
+    private String normalizeExtractedPdfText(String text) {
+        if (text == null) {
+            return "";
+        }
+
+        return text
+                .replace("\r\n", "\n")
+                .replace('\r', '\n')
+                .trim();
     }
 
     private int findPdfHeaderOffset(MultipartFile resumePdf) {
@@ -403,6 +464,12 @@ public class AnalysisService {
         }
 
         return RequirementCategory.QUALIFICATION;
+    }
+
+    private RequirementType parseRequirementType(RequirementCategory category) {
+        return category == RequirementCategory.PREFERENCE
+                ? RequirementType.PREFERRED
+                : RequirementType.REQUIRED;
     }
 
     private MatchStatus parseMatchStatus(String status) {

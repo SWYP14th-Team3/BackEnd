@@ -59,6 +59,20 @@ public class AnalysisController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @GetMapping("/{analysisResultId}")
+    @SecurityRequirement(name = JWT_SECURITY_SCHEME_NAME)
+    public ResponseEntity<ApiResponse<AnalysisDetailResponse>> getAnalysisDetail(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long analysisResultId
+    ) {
+        AnalysisDetailResponse response = analysisService.getAnalysisDetail(
+                principal.getUserId(),
+                analysisResultId
+        );
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @SecurityRequirement(name = JWT_SECURITY_SCHEME_NAME)
     public ResponseEntity<ApiResponse<AnalysisDetailResponse>> createAnalysis(

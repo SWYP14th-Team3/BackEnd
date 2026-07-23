@@ -11,10 +11,12 @@ import lombok.Getter;
 public class JobRequirementResponse {
 
     private Long requirementId;
+    private String requirementType;
     private String category;
     private String title;
     private String description;
-    private String sourceText;
+    private String jdEvidence;
+    private Integer inputOrder;
     private RequirementEvaluationResponse evaluation;
 
     public static JobRequirementResponse from(
@@ -23,10 +25,12 @@ public class JobRequirementResponse {
     ) {
         return JobRequirementResponse.builder()
                 .requirementId(requirement.getId())
+                .requirementType(requirement.getRequirementType().name())
                 .category(toCategoryLabel(requirement.getCategory()))
                 .title(requirement.getTitle())
                 .description(requirement.getDescription())
-                .sourceText(requirement.getSourceText())
+                .jdEvidence(requirement.getJdEvidence())
+                .inputOrder(requirement.getInputOrder())
                 .evaluation(RequirementEvaluationResponse.from(evaluation))
                 .build();
     }

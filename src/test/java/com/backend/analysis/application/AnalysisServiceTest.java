@@ -3,13 +3,21 @@ package com.backend.analysis.application;
 import com.backend.analysis.domain.JobInputType;
 import com.backend.global.exception.CustomException;
 import com.backend.global.exception.ErrorCode;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
@@ -69,6 +77,56 @@ class AnalysisServiceTest {
     }
 
     @Test
+    @DisplayName("10MB를 초과한 PDF는 거부한다")
+    void validatePdfRejectsPdfOver10Mb() {
+        byte[] bytes = new byte[(10 * 1024 * 1024) + 1];
+        byte[] header = "%PDF-1.7".getBytes(StandardCharsets.US_ASCII);
+        System.arraycopy(header, 0, bytes, 0, header.length);
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "resume.pdf",
+                "application/pdf",
+                bytes
+        );
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(analysisService, "validatePdf", file))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.PDF_FILE_TOO_LARGE);
+    }
+
+    @Test
+    @DisplayName("텍스트 기반 PDF에서 이력서 텍스트를 추출한다")
+    void extractResumeTextFromTextBasedPdf() throws IOException {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "resume.pdf",
+                "application/pdf",
+                createTextPdf("Spring Boot backend developer")
+        );
+
+        String text = ReflectionTestUtils.invokeMethod(analysisService, "extractResumeText", file);
+
+        assertThat(text).contains("Spring Boot backend developer");
+    }
+
+    @Test
+    @DisplayName("텍스트를 읽을 수 없는 PDF는 거부한다")
+    void extractResumeTextRejectsPdfWithoutText() throws IOException {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "resume.pdf",
+                "application/pdf",
+                createBlankPdf()
+        );
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(analysisService, "extractResumeText", file))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.UNREADABLE_PDF_TEXT);
+    }
+
+    @Test
     @DisplayName("URL 입력 방식은 jobUrl만 허용한다")
     void validateJobPostingInputAcceptsOnlyJobUrlForUrlType() {
         assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
@@ -125,5 +183,33 @@ class AnalysisServiceTest {
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+    }
+
+    private byte[] createTextPdf(String text) throws IOException {
+        try (PDDocument document = new PDDocument();
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+
+            try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+                contentStream.beginText();
+                contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+                contentStream.newLineAtOffset(50, 700);
+                contentStream.showText(text);
+                contentStream.endText();
+            }
+
+            document.save(outputStream);
+            return outputStream.toByteArray();
+        }
+    }
+
+    private byte[] createBlankPdf() throws IOException {
+        try (PDDocument document = new PDDocument();
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            document.addPage(new PDPage());
+            document.save(outputStream);
+            return outputStream.toByteArray();
+        }
     }
 }

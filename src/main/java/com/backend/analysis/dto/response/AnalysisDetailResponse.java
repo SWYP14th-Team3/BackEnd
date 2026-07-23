@@ -26,6 +26,12 @@ public class AnalysisDetailResponse {
     private Integer yellowCount;
     private Integer greenCount;
 
+    private OverallLevel previousOverallLevel;
+    private Integer previousRedCount;
+    private Integer previousYellowCount;
+    private Integer previousGreenCount;
+    private LocalDateTime lastReanalyzedAt;
+
     private Integer retryCount;
     private Integer remainingRetryCount;
 
@@ -33,23 +39,23 @@ public class AnalysisDetailResponse {
 
     private JobInputType jobInputType;
     private String jobUrl;
-    private String jobPostingRaw;
-    private String resumeOriginalText;
+    private String jobPlatform;
+    private String jobOriginalText;
+    private String jobSummaryText;
     private String resumeCurrentText;
+    private String resumeFileName;
+    private Long resumeFileSize;
+    private LocalDateTime resumeLastSavedAt;
+    private LocalDateTime finalSavedAt;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private LocalDateTime lastSavedAt;
 
     private List<JobRequirementResponse> requirements;
 
     public static AnalysisDetailResponse from(
             AnalysisResult analysisResult,
-            List<JobRequirementResponse> requirements,
-            JobInputType jobInputType,
-            String jobUrl,
-            String jobPostingRaw,
-            String resumeOriginalText
+            List<JobRequirementResponse> requirements
     ) {
         int retryCount = analysisResult.getRetryCount();
 
@@ -61,17 +67,26 @@ public class AnalysisDetailResponse {
                 .redCount(analysisResult.getRedCount())
                 .yellowCount(analysisResult.getYellowCount())
                 .greenCount(analysisResult.getGreenCount())
+                .previousOverallLevel(analysisResult.getPreviousOverallLevel())
+                .previousRedCount(analysisResult.getPreviousRedCount())
+                .previousYellowCount(analysisResult.getPreviousYellowCount())
+                .previousGreenCount(analysisResult.getPreviousGreenCount())
+                .lastReanalyzedAt(analysisResult.getLastReanalyzedAt())
                 .retryCount(retryCount)
                 .remainingRetryCount(Math.max(0, MAX_RETRY_COUNT - retryCount))
                 .satisfaction(analysisResult.getSatisfaction())
-                .jobInputType(jobInputType)
-                .jobUrl(jobUrl)
-                .jobPostingRaw(jobPostingRaw)
-                .resumeOriginalText(resumeOriginalText)
+                .jobInputType(analysisResult.getJobDescription().getJobInputType())
+                .jobUrl(analysisResult.getJobDescription().getJobUrl())
+                .jobPlatform(analysisResult.getJobDescription().getJobPlatform())
+                .jobOriginalText(analysisResult.getJobDescription().getJdOriginalText())
+                .jobSummaryText(analysisResult.getJobDescription().getJdSummaryText())
                 .resumeCurrentText(analysisResult.getUserResume().getResumeContent())
+                .resumeFileName(analysisResult.getUserResume().getResumeFileName())
+                .resumeFileSize(analysisResult.getUserResume().getResumeFileSize())
+                .resumeLastSavedAt(analysisResult.getUserResume().getLastSavedAt())
+                .finalSavedAt(analysisResult.getFinalSavedAt())
                 .createdAt(analysisResult.getCreatedAt())
                 .updatedAt(analysisResult.getUpdatedAt())
-                .lastSavedAt(analysisResult.getLastSavedAt())
                 .requirements(requirements)
                 .build();
     }

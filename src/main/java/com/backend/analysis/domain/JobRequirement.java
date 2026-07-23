@@ -22,6 +22,10 @@ public class JobRequirement extends BaseCreatedTimeEntity {
     private AnalysisResult analysisResult;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "requirement_type", nullable = false, length = 20)
+    private RequirementType requirementType;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "category", nullable = false, length = 30)
     private RequirementCategory category;
 
@@ -33,21 +37,33 @@ public class JobRequirement extends BaseCreatedTimeEntity {
     private String description;
 
     @Lob
-    @Column(name = "source_text", columnDefinition = "TEXT")
-    private String sourceText;
+    @Column(name = "jd_evidence", columnDefinition = "TEXT")
+    private String jdEvidence;
+
+    @Column(name = "input_order", nullable = false)
+    private Integer inputOrder;
 
     @Builder
     private JobRequirement(
             AnalysisResult analysisResult,
+            RequirementType requirementType,
             RequirementCategory category,
             String title,
             String description,
-            String sourceText
+            String jdEvidence,
+            String sourceText,
+            Integer inputOrder
     ) {
         this.analysisResult = analysisResult;
+        this.requirementType = requirementType != null ? requirementType : RequirementType.REQUIRED;
         this.category = category;
         this.title = title;
         this.description = description;
-        this.sourceText = sourceText;
+        this.jdEvidence = jdEvidence != null ? jdEvidence : sourceText;
+        this.inputOrder = inputOrder != null ? inputOrder : 0;
+    }
+
+    public String getSourceText() {
+        return jdEvidence;
     }
 }

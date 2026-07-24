@@ -96,4 +96,20 @@ public class RequirementEvaluation {
         this.priorityScore = priorityScore;
         this.sortOrder = sortOrder;
     }
+
+    public void updateReanalysis(
+            MatchStatus matchStatus,
+            String resumeEvidence,
+            String judgeReason,
+            Integer effectScore,
+            Integer effortScore,
+            BigDecimal priorityScore
+    ) {
+        this.matchStatus = matchStatus;
+        this.resumeEvidence = resumeEvidence;
+        this.judgeReason = judgeReason;
+        this.effectScore = effectScore;
+        this.effortScore = effortScore;
+        this.priorityScore = priorityScore;
+    }
 }

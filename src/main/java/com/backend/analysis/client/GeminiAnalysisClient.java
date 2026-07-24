@@ -1,7 +1,9 @@
 package com.backend.analysis.client;
 
 import com.backend.analysis.dto.GeminiAnalysisResponse;
+import com.backend.analysis.dto.GeminiCardContentResult;
 import com.backend.analysis.dto.GeminiJobDescriptionResponse;
+import com.backend.analysis.dto.GeminiPriorityScoreResult;
 import com.backend.analysis.dto.GeminiResumeResponse;
 import com.backend.global.exception.CustomException;
 import com.backend.global.exception.ErrorCode;
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.multipart.MultipartFile;
 import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -66,12 +69,37 @@ public class GeminiAnalysisClient {
         }
 
         parts.add(textPart(prompt));
-        return generate(parts, GeminiJobDescriptionResponse.class);
+        return generate(parts, GeminiJobDescriptionResponse.class, jobDescriptionResponseSchema());
     }
 
     public GeminiAnalysisResponse analyze(String prompt) {
         // 정리된 이력서와 공고 내용을 비교 분석
         return generate(List.of(textPart(prompt)), GeminiAnalysisResponse.class, analysisResponseSchema());
+    }
+
+    public GeminiAnalysisResponse reanalyze(String prompt) {
+        // 기존 요건은 유지하고 수정된 이력서 기준으로 충족도만 다시 판정
+        return generate(List.of(textPart(prompt)), GeminiAnalysisResponse.class, reanalysisResponseSchema());
+    }
+
+    public List<GeminiPriorityScoreResult> scorePriorities(String prompt) {
+        // red/yellow 요건만 보내 effect/effort 점수를 계산
+        return generate(
+                List.of(textPart(prompt)),
+                new TypeReference<>() {
+                },
+                priorityScoreResponseSchema()
+        );
+    }
+
+    public List<GeminiCardContentResult> createCardContents(String prompt) {
+        // 모든 요건에 대해 카드 제목과 피드백을 생성
+        return generate(
+                List.of(textPart(prompt)),
+                new TypeReference<>() {
+                },
+                cardContentResponseSchema()
+        );
     }
 
     private <T> T generate(List<Map<String, Object>> parts, Class<T> responseType) {
@@ -81,8 +109,24 @@ public class GeminiAnalysisClient {
 
     private <T> T generate(
             List<Map<String, Object>> parts,
+            TypeReference<T> responseType,
+            Map<String, Object> responseSchema
+    ) {
+        return generate(parts, responseSchema, jsonText -> objectMapper.readValue(jsonText, responseType));
+    }
+
+    private <T> T generate(
+            List<Map<String, Object>> parts,
             Class<T> responseType,
             Map<String, Object> responseSchema
+    ) {
+        return generate(parts, responseSchema, jsonText -> objectMapper.readValue(jsonText, responseType));
+    }
+
+    private <T> T generate(
+            List<Map<String, Object>> parts,
+            Map<String, Object> responseSchema,
+            JsonParser<T> jsonParser
     ) {
         try {
             // Gemini가 JSON 응답만 반환하도록 설정
@@ -114,7 +158,7 @@ public class GeminiAnalysisClient {
 
             // Gemini 응답 본문에서 JSON 문자열만 꺼내 DTO로 변환
             String jsonText = extractJsonText(rawResponse);
-            return objectMapper.readValue(jsonText, responseType);
+            return jsonParser.parse(jsonText);
         } catch (JacksonException e) {
             log.warn("Failed to parse Gemini response: {}", e.getMessage(), e);
             throw new CustomException(ErrorCode.GEMINI_RESPONSE_PARSE_ERROR);
@@ -182,6 +226,8 @@ public class GeminiAnalysisClient {
         return Map.of(
                 "type", "OBJECT",
                 "properties", Map.of(
+                        "analyzable", Map.of("type", "BOOLEAN"),
+                        "fail_side", nullableStringSchema(),
                         "company", Map.of("type", "STRING"),
                         "position", Map.of("type", "STRING"),
                         "summary", Map.of(
@@ -208,35 +254,130 @@ public class GeminiAnalysisClient {
                                 "items", Map.of(
                                         "type", "OBJECT",
                                         "properties", Map.of(
-                                                "id", Map.of("type", "STRING"),
-                                                "text", Map.of("type", "STRING"),
-                                                "type", Map.of(
+                                                "req_id", Map.of("type", "STRING"),
+                                                "content", Map.of("type", "STRING"),
+                                                "importance", Map.of(
                                                         "type", "STRING",
-                                                        "enum", List.of("required", "preferred")
+                                                        "enum", List.of("필수", "우대")
                                                 ),
                                                 "status", Map.of(
                                                         "type", "STRING",
-                                                        "enum", List.of("met", "partial", "gap")
+                                                        "enum", List.of("green", "yellow", "red")
                                                 ),
-                                                "flag", nullableStringSchema(),
-                                                "evidence", nullableStringSchema(),
-                                                "feedback", nullableStringSchema(),
-                                                "suggestion", nullableStringSchema()
+                                                "jd_evidence", Map.of("type", "STRING"),
+                                                "resume_evidence", Map.of("type", "STRING"),
+                                                "judge_reason", Map.of("type", "STRING")
                                         ),
                                         "required", List.of(
-                                                "id",
-                                                "text",
-                                                "type",
+                                                "req_id",
+                                                "content",
+                                                "importance",
                                                 "status",
-                                                "flag",
-                                                "evidence",
-                                                "feedback",
-                                                "suggestion"
+                                                "jd_evidence",
+                                                "resume_evidence",
+                                                "judge_reason"
                                         )
                                 )
                         )
                 ),
-                "required", List.of("company", "position", "summary", "requirements")
+                "required", List.of("analyzable", "fail_side", "position", "requirements")
+        );
+    }
+
+    private Map<String, Object> jobDescriptionResponseSchema() {
+        // 채용공고 원문 확보 단계는 성공 여부와 원문 텍스트만 반환
+        return Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "success", Map.of("type", "BOOLEAN"),
+                        "raw_text", Map.of("type", "STRING")
+                ),
+                "required", List.of("success", "raw_text")
+        );
+    }
+
+    private Map<String, Object> reanalysisResponseSchema() {
+        // 재분석은 기존 요건 목록의 판정 결과만 반환
+        return Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "requirements", Map.of(
+                                "type", "ARRAY",
+                                "items", Map.of(
+                                        "type", "OBJECT",
+                                        "properties", Map.of(
+                                                "req_id", Map.of("type", "STRING"),
+                                                "content", Map.of("type", "STRING"),
+                                                "importance", Map.of(
+                                                        "type", "STRING",
+                                                        "enum", List.of("필수", "우대")
+                                                ),
+                                                "status", Map.of(
+                                                        "type", "STRING",
+                                                        "enum", List.of("green", "yellow", "red")
+                                                ),
+                                                "jd_evidence", Map.of("type", "STRING"),
+                                                "resume_evidence", Map.of("type", "STRING"),
+                                                "judge_reason", Map.of("type", "STRING")
+                                        ),
+                                        "required", List.of(
+                                                "req_id",
+                                                "content",
+                                                "importance",
+                                                "status",
+                                                "jd_evidence",
+                                                "resume_evidence",
+                                                "judge_reason"
+                                        )
+                                )
+                        )
+                ),
+                "required", List.of("requirements")
+        );
+    }
+
+    private Map<String, Object> priorityScoreResponseSchema() {
+        // LLM3 우선순위 채점은 red/yellow 요건 배열만 반환
+        return Map.of(
+                "type", "ARRAY",
+                "items", Map.of(
+                        "type", "OBJECT",
+                        "properties", Map.of(
+                                "req_id", Map.of("type", "STRING"),
+                                "effect_score", Map.of(
+                                        "type", "INTEGER",
+                                        "minimum", 1,
+                                        "maximum", 5
+                                ),
+                                "effort_score", Map.of(
+                                        "type", "INTEGER",
+                                        "minimum", 1,
+                                        "maximum", 5
+                                ),
+                                "reason", Map.of("type", "STRING")
+                        ),
+                        "required", List.of("req_id", "effect_score", "effort_score", "reason")
+                )
+        );
+    }
+
+    private Map<String, Object> cardContentResponseSchema() {
+        // LLM4 카드 문구 생성은 모든 요건의 title/feedback 배열을 반환
+        return Map.of(
+                "type", "ARRAY",
+                "items", Map.of(
+                        "type", "OBJECT",
+                        "properties", Map.of(
+                                "req_id", Map.of("type", "STRING"),
+                                "status", Map.of(
+                                        "type", "STRING",
+                                        "enum", List.of("green", "yellow", "red")
+                                ),
+                                "title", Map.of("type", "STRING"),
+                                "feedback", Map.of("type", "STRING")
+                        ),
+                        "required", List.of("req_id", "status", "title", "feedback")
+                )
         );
     }
 
@@ -246,5 +387,10 @@ public class GeminiAnalysisClient {
                 "type", "STRING",
                 "nullable", true
         );
+    }
+
+    @FunctionalInterface
+    private interface JsonParser<T> {
+        T parse(String jsonText) throws JacksonException;
     }
 }

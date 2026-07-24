@@ -109,6 +109,25 @@ public class AnalysisResult extends BaseTimeEntity {
         this.satisfaction = satisfaction;
     }
 
+    public void applyReanalysis(
+            OverallLevel overallLevel,
+            Integer redCount,
+            Integer yellowCount,
+            Integer greenCount,
+            LocalDateTime reanalyzedAt
+    ) {
+        this.previousOverallLevel = this.overallLevel;
+        this.previousRedCount = this.redCount;
+        this.previousYellowCount = this.yellowCount;
+        this.previousGreenCount = this.greenCount;
+        this.overallLevel = overallLevel;
+        this.redCount = redCount;
+        this.yellowCount = yellowCount;
+        this.greenCount = greenCount;
+        this.retryCount = this.retryCount + 1;
+        this.lastReanalyzedAt = reanalyzedAt;
+    }
+
     public void delete(LocalDateTime deletedAt) {
         this.deletedAt = deletedAt;
     }

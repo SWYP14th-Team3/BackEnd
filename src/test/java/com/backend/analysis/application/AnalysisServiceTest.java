@@ -1,6 +1,9 @@
 package com.backend.analysis.application;
 
 import com.backend.analysis.domain.JobInputType;
+import com.backend.analysis.domain.OverallLevel;
+import com.backend.analysis.dto.GeminiPriorityScoreResult;
+import com.backend.analysis.dto.GeminiRequirementResult;
 import com.backend.global.exception.CustomException;
 import com.backend.global.exception.ErrorCode;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -15,7 +18,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -24,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 class AnalysisServiceTest {
 
     private final AnalysisService analysisService = new AnalysisService(
+            null,
             null,
             null,
             null,
@@ -134,6 +140,7 @@ class AnalysisServiceTest {
                 "validateJobPostingInput",
                 JobInputType.URL,
                 "https://company.com/jobs/123",
+                null,
                 null
         ));
 
@@ -142,7 +149,8 @@ class AnalysisServiceTest {
                 "validateJobPostingInput",
                 JobInputType.URL,
                 "https://company.com/jobs/123",
-                "직접 입력 공고 텍스트"
+                "직접 입력 공고 텍스트",
+                null
         ))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
@@ -159,7 +167,8 @@ class AnalysisServiceTest {
                 "validateJobPostingInput",
                 JobInputType.TEXT,
                 null,
-                validJobText
+                validJobText,
+                null
         ));
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
@@ -167,7 +176,8 @@ class AnalysisServiceTest {
                 "validateJobPostingInput",
                 JobInputType.TEXT,
                 "https://company.com/jobs/123",
-                validJobText
+                validJobText,
+                null
         ))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
@@ -178,11 +188,65 @@ class AnalysisServiceTest {
                 "validateJobPostingInput",
                 JobInputType.TEXT,
                 null,
-                "a".repeat(99)
+                "a".repeat(99),
+                null
         ))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+    }
+
+    @Test
+    @DisplayName("우선순위 점수는 effect 제곱을 effort로 나누고 소수점 둘째 자리로 반올림한다")
+    void calculatePriorityScoreSquaresEffectAndDividesByEffort() {
+        GeminiPriorityScoreResult priorityScore = new GeminiPriorityScoreResult(
+                "r1",
+                5,
+                3,
+                "테스트"
+        );
+
+        BigDecimal result = ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "calculatePriorityScore",
+                priorityScore
+        );
+
+        assertThat(result).isEqualByComparingTo("8.33");
+    }
+
+    @Test
+    @DisplayName("필수 red가 2개 이상이면 적합도 점수와 관계없이 하로 계산한다")
+    void calculateOverallLevelForTwoRequiredRedsReturnsLow() {
+        OverallLevel result = ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "calculateOverallLevel",
+                List.of(
+                        requirement("r1", "필수", "red"),
+                        requirement("r2", "필수", "red"),
+                        requirement("r3", "우대", "green")
+                )
+        );
+
+        assertThat(result).isEqualTo(OverallLevel.LOW);
+    }
+
+    @Test
+    @DisplayName("필수 red가 1개면 적합도 점수가 높아도 최대 중으로 계산한다")
+    void calculateOverallLevelForOneRequiredRedCapsAtMedium() {
+        OverallLevel result = ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "calculateOverallLevel",
+                List.of(
+                        requirement("r1", "필수", "red"),
+                        requirement("r2", "필수", "green"),
+                        requirement("r3", "필수", "green"),
+                        requirement("r4", "필수", "green"),
+                        requirement("r5", "우대", "green")
+                )
+        );
+
+        assertThat(result).isEqualTo(OverallLevel.MEDIUM);
     }
 
     private byte[] createTextPdf(String text) throws IOException {
@@ -211,5 +275,24 @@ class AnalysisServiceTest {
             document.save(outputStream);
             return outputStream.toByteArray();
         }
+    }
+
+    private GeminiRequirementResult requirement(String reqId, String importance, String status) {
+        return new GeminiRequirementResult(
+                reqId,
+                reqId + " 요건",
+                importance,
+                reqId + " 공고 근거",
+                reqId + " 이력서 근거",
+                reqId + " 판단 이유",
+                null,
+                null,
+                null,
+                status,
+                null,
+                null,
+                null,
+                null
+        );
     }
 }

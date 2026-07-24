@@ -28,7 +28,7 @@ class JobRequirementResponseTest {
 
         RequirementEvaluation evaluation = RequirementEvaluation.builder()
                 .jobRequirement(requirement)
-                .matchStatus(MatchStatus.NEEDS_IMPROVEMENT)
+                .matchStatus(MatchStatus.yellow)
                 .displayTitle("Spring Boot 경험을 더 구체화하세요")
                 .resumeEvidence("Spring Boot 프로젝트 경험")
                 .judgeReason("Spring Boot 경험은 확인되지만 실무 근거가 부족합니다.")
@@ -46,7 +46,7 @@ class JobRequirementResponseTest {
         assertThat(response.getCategory()).isEqualTo("업무역량");
         assertThat(response.getJdEvidence()).isEqualTo("Spring Boot 기반 백엔드 개발 경험 보유자");
         assertThat(response.getInputOrder()).isEqualTo(1);
-        assertThat(response.getEvaluation().getMatchStatus()).isEqualTo(MatchStatus.NEEDS_IMPROVEMENT);
+        assertThat(response.getEvaluation().getMatchStatus()).isEqualTo(MatchStatus.yellow);
         assertThat(response.getEvaluation().getDisplayTitle()).isEqualTo("Spring Boot 경험을 더 구체화하세요");
         assertThat(response.getEvaluation().getJudgeReason()).isEqualTo("Spring Boot 경험은 확인되지만 실무 근거가 부족합니다.");
         assertThat(response.getEvaluation().getEffectScore()).isEqualTo(4);

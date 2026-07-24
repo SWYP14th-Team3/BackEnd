@@ -2,6 +2,12 @@ package com.backend.analysis.dto;
 
 // Gemini가 추출한 요건 1개와 그 평가 결과
 public record GeminiRequirementResult(
+        String req_id,
+        String content,
+        String importance,
+        String jd_evidence,
+        String resume_evidence,
+        String judge_reason,
         String id,
         String text,
         String type,
@@ -11,24 +17,27 @@ public record GeminiRequirementResult(
         String feedback,
         String suggestion
 ) {
+    public String reqId() {
+        return req_id != null ? req_id : id;
+    }
+
     public String category() {
-        // Gemini의 type 값을 DB category 의미로 사용
-        return type;
+        // importance를 우선 사용하고, 기존 응답 호환을 위해 type도 허용
+        return importance != null ? importance : type;
     }
 
     public String title() {
-        // Gemini의 text 값을 화면 요건 제목으로 사용
-        return text;
+        // content를 우선 사용하고, 기존 응답 호환을 위해 text도 허용
+        return content != null ? content : text;
     }
 
     public String description() {
-        // 별도 설명 필드가 없으므로 원문 요건을 설명으로 사용
-        return text;
+        return title();
     }
 
     public String sourceText() {
-        // Gemini의 text 값을 공고 원문 근거로 사용
-        return text;
+        // jd_evidence를 우선 사용하고, 없으면 요건 문구를 근거로 사용
+        return jd_evidence != null ? jd_evidence : title();
     }
 
     public String matchStatus() {
@@ -37,8 +46,11 @@ public record GeminiRequirementResult(
     }
 
     public String resumeEvidence() {
-        // Gemini의 evidence 값을 이력서 근거로 사용
-        return evidence;
+        return resume_evidence != null ? resume_evidence : evidence;
+    }
+
+    public String judgeReason() {
+        return judge_reason != null ? judge_reason : feedback;
     }
 
     public String revisionSuggestion() {

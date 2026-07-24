@@ -1285,7 +1285,7 @@ public class AnalysisService {
                       "importance": "필수",
                       "status": "green",
                       "jd_evidence": "자격요건: React 기반 개발 경험",
-                      "resume_evidence": "React 기반 대시보드 설계 및 구현, 렌더링 30% 개선",
+                      "resume_evidence": "React 기반 대시보드 설계 및 구현, 렌더링 30%% 개선",
                       "judge_reason": "이번 수정에서 React 프로젝트 경험이 역할과 성과까지 함께 추가돼 충족돼요."
                     }
                   ]

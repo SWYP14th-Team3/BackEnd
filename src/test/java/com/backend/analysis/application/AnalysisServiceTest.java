@@ -1,7 +1,10 @@
 package com.backend.analysis.application;
 
 import com.backend.analysis.domain.JobInputType;
+import com.backend.analysis.domain.JobRequirement;
 import com.backend.analysis.domain.OverallLevel;
+import com.backend.analysis.domain.RequirementCategory;
+import com.backend.analysis.domain.RequirementType;
 import com.backend.analysis.dto.GeminiPriorityScoreResult;
 import com.backend.analysis.dto.GeminiRequirementResult;
 import com.backend.global.exception.CustomException;
@@ -331,6 +334,28 @@ class AnalysisServiceTest {
         );
 
         assertThat(result).isEqualTo(OverallLevel.MEDIUM);
+    }
+
+    @Test
+    @DisplayName("재분석 프롬프트 예시의 퍼센트 문자는 포맷 예외를 발생시키지 않는다")
+    void buildReanalysisPromptEscapesLiteralPercent() {
+        JobRequirement requirement = JobRequirement.builder()
+                .requirementType(RequirementType.REQUIRED)
+                .category(RequirementCategory.QUALIFICATION)
+                .title("React 기반 개발 경험")
+                .jdEvidence("자격요건: React 기반 개발 경험")
+                .inputOrder(0)
+                .build();
+
+        String prompt = ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "buildReanalysisPrompt",
+                List.of(requirement),
+                "React 기반 대시보드 렌더링 30% 개선"
+        );
+
+        assertThat(prompt).contains("렌더링 30% 개선");
+        assertThat(prompt).contains("React 기반 대시보드 렌더링 30% 개선");
     }
 
     private byte[] createTextPdf(String text) throws IOException {

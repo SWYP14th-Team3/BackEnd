@@ -5,6 +5,7 @@ import com.backend.analysis.domain.JobInputType;
 import com.backend.analysis.dto.request.AnalysisFinalSaveRequest;
 import com.backend.analysis.dto.request.AnalysisResumeSaveRequest;
 import com.backend.analysis.dto.request.AnalysisSatisfactionRequest;
+import com.backend.analysis.dto.request.ReanalysisRequest;
 import com.backend.analysis.dto.response.AnalysisDeleteResponse;
 import com.backend.analysis.dto.response.AnalysisDetailResponse;
 import com.backend.analysis.dto.response.AnalysisFinalSaveResponse;
@@ -12,6 +13,7 @@ import com.backend.analysis.dto.response.AnalysisPageResponse;
 import com.backend.analysis.dto.response.AnalysisSaveResponse;
 import com.backend.analysis.dto.response.AnalysisSatisfactionResponse;
 import com.backend.analysis.dto.response.AnalysisSummaryResponse;
+import com.backend.analysis.dto.response.ReanalysisResponse;
 import com.backend.global.response.ApiResponse;
 import com.backend.global.security.UserPrincipal;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -32,6 +34,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 import static com.backend.global.config.OpenApiConfig.JWT_SECURITY_SCHEME_NAME;
 
@@ -80,16 +84,18 @@ public class AnalysisController {
     public ResponseEntity<ApiResponse<AnalysisDetailResponse>> createAnalysis(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestPart(name = "resumeFile", required = false) MultipartFile resumeFile,
+            @RequestPart(name = "jobImages", required = false) List<MultipartFile> jobImages,
             @RequestParam(required = false) JobInputType jobInputType,
             @RequestParam(required = false) String jobUrl,
             @RequestParam(required = false) String jobText
     ) {
         AnalysisDetailResponse response = analysisService.createAnalysis(
-                principal.getUserId(),
+                principal != null ? principal.getUserId() : 1L,
                 jobInputType,
                 jobUrl,
                 jobText,
-                resumeFile
+                resumeFile,
+                jobImages
         );
 
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -103,6 +109,22 @@ public class AnalysisController {
             @Valid @RequestBody AnalysisResumeSaveRequest request
     ) {
         AnalysisSaveResponse response = analysisService.saveResume(
+                principal.getUserId(),
+                analysisResultId,
+                request.getResumeCurrentText()
+        );
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/{analysisResultId}/reanalysis")
+    @SecurityRequirement(name = JWT_SECURITY_SCHEME_NAME)
+    public ResponseEntity<ApiResponse<ReanalysisResponse>> reanalyze(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long analysisResultId,
+            @Valid @RequestBody ReanalysisRequest request
+    ) {
+        ReanalysisResponse response = analysisService.reanalyze(
                 principal.getUserId(),
                 analysisResultId,
                 request.getResumeCurrentText()

@@ -5,6 +5,7 @@ import com.backend.global.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -62,6 +63,7 @@ public class SecurityConfig {
                         ).authenticated()
 
                         // Analysis
+                        .requestMatchers(HttpMethod.POST, "/api/analyses").permitAll()
                         .requestMatchers(
                                 "/api/analyses",
                                 "/api/analyses/**"

@@ -71,4 +71,14 @@ public class JobDescription extends BaseTimeEntity {
     public String getJdContent() {
         return jdSummaryText;
     }
+
+    public void updateExtractedInfo(String companyName, String positionTitle) {
+        if (companyName != null && !companyName.isBlank()) {
+            this.companyName = companyName;
+        }
+
+        if (positionTitle != null && !positionTitle.isBlank()) {
+            this.positionTitle = positionTitle;
+        }
+    }
 }

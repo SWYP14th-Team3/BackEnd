@@ -2,10 +2,10 @@ package com.backend.analysis.application;
 
 import com.backend.analysis.client.GeminiAnalysisClient;
 import com.backend.analysis.client.JobPostingCrawler;
-import com.backend.analysis.domain.AnalysisAttempt;
 import com.backend.analysis.domain.AnalysisResult;
 import com.backend.analysis.domain.JobDescription;
 import com.backend.analysis.domain.JobInputType;
+import com.backend.analysis.domain.JobPostingImage;
 import com.backend.analysis.domain.JobRequirement;
 import com.backend.analysis.domain.MatchStatus;
 import com.backend.analysis.domain.OverallLevel;
@@ -28,15 +28,14 @@ import com.backend.analysis.dto.response.AnalysisSatisfactionResponse;
 import com.backend.analysis.dto.response.AnalysisSummaryResponse;
 import com.backend.analysis.dto.response.JobRequirementResponse;
 import com.backend.analysis.dto.response.ReanalysisResponse;
-import com.backend.analysis.infrastructure.AnalysisAttemptRepository;
 import com.backend.analysis.infrastructure.AnalysisResultRepository;
 import com.backend.analysis.infrastructure.JobDescriptionRepository;
+import com.backend.analysis.infrastructure.JobPostingImageRepository;
 import com.backend.analysis.infrastructure.JobRequirementRepository;
 import com.backend.analysis.infrastructure.RequirementEvaluationRepository;
 import com.backend.analysis.infrastructure.UserResumeRepository;
 import com.backend.global.exception.CustomException;
 import com.backend.global.exception.ErrorCode;
-import com.backend.user.domain.Provider;
 import com.backend.user.domain.User;
 import com.backend.user.infrastructure.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -72,6 +71,7 @@ public class AnalysisService {
     private static final byte[] PDF_HEADER = "%PDF-".getBytes(StandardCharsets.US_ASCII);
     private static final int PDF_HEADER_SCAN_LIMIT = 1024;
     private static final long MAX_RESUME_PDF_SIZE = 10 * 1024 * 1024;
+    private static final int MAX_JOB_IMAGE_COUNT = 10;
     private static final int MAX_RETRY_COUNT = 5;
 
     private final JobPostingCrawler jobPostingCrawler;
@@ -79,7 +79,7 @@ public class AnalysisService {
     private final UserRepository userRepository;
     private final UserResumeRepository userResumeRepository;
     private final JobDescriptionRepository jobDescriptionRepository;
-    private final AnalysisAttemptRepository analysisAttemptRepository;
+    private final JobPostingImageRepository jobPostingImageRepository;
     private final AnalysisResultRepository analysisResultRepository;
     private final JobRequirementRepository jobRequirementRepository;
     private final RequirementEvaluationRepository requirementEvaluationRepository;
@@ -93,7 +93,7 @@ public class AnalysisService {
     ) {
         validatePageRequest(page, size);
 
-        User user = findOrCreateTestUser(userId);
+        User user = findUser(userId);
 
         PageRequest pageRequest = PageRequest.of(page, size);
         Page<AnalysisResult> analysisResults;
@@ -137,7 +137,7 @@ public class AnalysisService {
         validatePdf(resumeFile);
         validateJobPostingInput(jobInputType, jobUrl, jobText, jobImages);
 
-        User user = findOrCreateTestUser(userId);
+        User user = findUser(userId);
 
         String resumeText = extractResumeText(resumeFile);
         UserResume resume = userResumeRepository.save(
@@ -171,6 +171,7 @@ public class AnalysisService {
                         .jdSummaryText(jobPostingRawText)
                         .build()
         );
+        saveJobPostingImages(jobDescription, jobImages);
 
         GeminiAnalysisResponse analysisResponse = geminiAnalysisClient.analyze(
                 buildAnalysisPrompt(resume.getResumeContent(), jobDescription.getJdContent())
@@ -208,8 +209,6 @@ public class AnalysisService {
                 priorityScoreByReqId,
                 cardContentByReqId
         );
-        analysisAttemptRepository.save(AnalysisAttempt.initial(analysisResult));
-
         return AnalysisDetailResponse.from(
                 analysisResult,
                 requirements
@@ -286,9 +285,6 @@ public class AnalysisService {
                 reanalyzedAt
         );
 
-        AnalysisAttempt previousAttempt = analysisAttemptRepository.findTopByAnalysisResultOrderByAttemptNoDesc(analysisResult)
-                .orElseGet(() -> analysisAttemptRepository.save(AnalysisAttempt.initial(analysisResult)));
-        analysisAttemptRepository.save(AnalysisAttempt.reanalysis(analysisResult, previousAttempt, "재분석"));
         analysisResultRepository.flush();
 
         return ReanalysisResponse.from(
@@ -589,14 +585,9 @@ public class AnalysisService {
         return true;
     }
 
-    private User findOrCreateTestUser(Long userId) {
+    private User findUser(Long userId) {
         return userRepository.findById(userId)
-                .orElseGet(() -> userRepository.save(User.createSocialUser(
-                        "local-test@example.com",
-                        Provider.GOOGLE,
-                        "local-test-user",
-                        "로컬 테스트 유저"
-                )));
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
     }
 
     private void validateJobPostingInput(
@@ -612,6 +603,11 @@ public class AnalysisService {
         boolean hasUrl = hasText(jobUrl);
         boolean hasJobText = hasText(jobText);
         boolean hasJobImage = firstPresentImage(jobImages) != null;
+        int jobImageCount = presentImages(jobImages).size();
+
+        if (jobImageCount > MAX_JOB_IMAGE_COUNT) {
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+        }
 
         if (jobInputType == JobInputType.URL) {
             if (!hasUrl || hasJobText || hasJobImage || !isHttpUrl(jobUrl)) {
@@ -638,6 +634,20 @@ public class AnalysisService {
         }
 
         throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+    }
+
+    private void saveJobPostingImages(JobDescription jobDescription, List<MultipartFile> jobImages) {
+        List<MultipartFile> presentImages = presentImages(jobImages);
+        for (int i = 0; i < presentImages.size(); i++) {
+            MultipartFile image = presentImages.get(i);
+            jobPostingImageRepository.save(JobPostingImage.builder()
+                    .jobDescription(jobDescription)
+                    .originalFileName(defaultIfBlank(image.getOriginalFilename(), "job-image-" + (i + 1)))
+                    .contentType(defaultIfBlank(image.getContentType(), "application/octet-stream"))
+                    .fileSize(image.getSize())
+                    .imageOrder(i)
+                    .build());
+        }
     }
 
     private void validateAnalysisResponse(GeminiAnalysisResponse analysisResponse) {
@@ -704,14 +714,19 @@ public class AnalysisService {
     }
 
     private MultipartFile firstPresentImage(List<MultipartFile> jobImages) {
+        return presentImages(jobImages).stream()
+                .findFirst()
+                .orElse(null);
+    }
+
+    private List<MultipartFile> presentImages(List<MultipartFile> jobImages) {
         if (jobImages == null || jobImages.isEmpty()) {
-            return null;
+            return List.of();
         }
 
         return jobImages.stream()
                 .filter(image -> image != null && !image.isEmpty())
-                .findFirst()
-                .orElse(null);
+                .toList();
     }
 
     private boolean isHttpUrl(String url) {

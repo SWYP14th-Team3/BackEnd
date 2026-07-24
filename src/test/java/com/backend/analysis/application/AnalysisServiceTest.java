@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -197,6 +198,49 @@ class AnalysisServiceTest {
     }
 
     @Test
+    @DisplayName("IMAGE 입력 방식은 jobImages만 허용하고 최대 10장까지 받는다")
+    void validateJobPostingInputAcceptsOnlyJobImagesForImageType() {
+        List<MockMultipartFile> validImages = List.of(jobImage("job-1.png"));
+
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.IMAGE,
+                null,
+                null,
+                validImages
+        ));
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.IMAGE,
+                "https://company.com/jobs/123",
+                null,
+                validImages
+        ))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+
+        List<MockMultipartFile> tooManyImages = IntStream.rangeClosed(1, 11)
+                .mapToObj(index -> jobImage("job-" + index + ".png"))
+                .toList();
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.IMAGE,
+                null,
+                null,
+                tooManyImages
+        ))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+    }
+
+    @Test
     @DisplayName("우선순위 점수는 effect 제곱을 effort로 나누고 소수점 둘째 자리로 반올림한다")
     void calculatePriorityScoreSquaresEffectAndDividesByEffort() {
         GeminiPriorityScoreResult priorityScore = new GeminiPriorityScoreResult(
@@ -275,6 +319,15 @@ class AnalysisServiceTest {
             document.save(outputStream);
             return outputStream.toByteArray();
         }
+    }
+
+    private MockMultipartFile jobImage(String fileName) {
+        return new MockMultipartFile(
+                "jobImages",
+                fileName,
+                "image/png",
+                "image".getBytes(StandardCharsets.UTF_8)
+        );
     }
 
     private GeminiRequirementResult requirement(String reqId, String importance, String status) {

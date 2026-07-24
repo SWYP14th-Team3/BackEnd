@@ -12,13 +12,15 @@ public class AnalysisSaveResponse {
 
     private Long analysisResultId;
     private String resumeCurrentText;
-    private LocalDateTime updatedAt;
+    private LocalDateTime resumeLastSavedAt;
+    private LocalDateTime finalSavedAt;
 
     public static AnalysisSaveResponse from(AnalysisResult analysisResult) {
         return AnalysisSaveResponse.builder()
                 .analysisResultId(analysisResult.getId())
                 .resumeCurrentText(analysisResult.getUserResume().getResumeContent())
-                .updatedAt(analysisResult.getUpdatedAt())
+                .resumeLastSavedAt(analysisResult.getUserResume().getLastSavedAt())
+                .finalSavedAt(analysisResult.getFinalSavedAt())
                 .build();
     }
 }

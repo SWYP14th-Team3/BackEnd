@@ -4,7 +4,7 @@ import com.backend.analysis.domain.AnalysisResult;
 import com.backend.analysis.domain.JobDescription;
 import com.backend.analysis.domain.OverallLevel;
 import com.backend.analysis.domain.UserResume;
-import com.backend.analysis.dto.response.AnalysisFinalSaveResponse;
+import com.backend.analysis.dto.response.AnalysisDeleteResponse;
 import com.backend.analysis.infrastructure.AnalysisResultRepository;
 import com.backend.global.exception.CustomException;
 import com.backend.global.exception.ErrorCode;
@@ -22,7 +22,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class AnalysisFinalSaveServiceTest {
+class AnalysisDeleteServiceTest {
 
     private final AnalysisResultRepository analysisResultRepository = mock(AnalysisResultRepository.class);
     private final AnalysisService analysisService = new AnalysisService(
@@ -38,44 +38,29 @@ class AnalysisFinalSaveServiceTest {
     );
 
     @Test
-    @DisplayName("분석 결과 최종 저장 시 이력서 편집본과 최종 저장 시각을 저장한다")
-    void finalSaveAnalysisUpdatesResumeContentAndFinalSavedAt() {
+    @DisplayName("분석 결과 삭제는 soft delete 처리 시각을 응답한다")
+    void deleteAnalysisResultMarksDeletedAt() {
         AnalysisResult analysisResult = createAnalysisResult(1L);
         when(analysisResultRepository.findByIdAndDeletedAtIsNull(1L))
                 .thenReturn(Optional.of(analysisResult));
 
-        AnalysisFinalSaveResponse response = analysisService.finalSaveAnalysis(
-                1L,
-                1L,
-                " 최종 저장할 이력서 텍스트입니다. "
-        );
+        AnalysisDeleteResponse response = analysisService.deleteAnalysisResult(1L, 1L);
 
         assertThat(response.getAnalysisResultId()).isEqualTo(1L);
-        assertThat(response.getSaved()).isTrue();
-        assertThat(response.getResumeCurrentText()).isEqualTo("최종 저장할 이력서 텍스트입니다.");
-        assertThat(response.getResumeLastSavedAt()).isNotNull();
-        assertThat(response.getFinalSavedAt()).isNotNull();
-        assertThat(response.getResumeLastSavedAt()).isEqualTo(response.getFinalSavedAt());
+        assertThat(response.getDeleted()).isTrue();
+        assertThat(response.getDeletedAt()).isNotNull();
+        assertThat(analysisResult.getDeletedAt()).isEqualTo(response.getDeletedAt());
         verify(analysisResultRepository).flush();
     }
 
     @Test
-    @DisplayName("최종 저장할 이력서 텍스트가 공백이면 거부한다")
-    void finalSaveAnalysisRejectsBlankResumeContent() {
-        assertThatThrownBy(() -> analysisService.finalSaveAnalysis(1L, 1L, "   "))
-                .isInstanceOf(CustomException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.EMPTY_RESUME_CONTENT);
-    }
-
-    @Test
-    @DisplayName("다른 사용자의 분석 결과 최종 저장은 저장 권한 오류로 거부한다")
-    void finalSaveAnalysisRejectsOtherUserAnalysisResult() {
+    @DisplayName("다른 사용자의 분석 결과 삭제는 삭제 권한 오류로 거부한다")
+    void deleteAnalysisResultRejectsOtherUserAnalysisResult() {
         AnalysisResult analysisResult = createAnalysisResult(2L);
         when(analysisResultRepository.findByIdAndDeletedAtIsNull(1L))
                 .thenReturn(Optional.of(analysisResult));
 
-        assertThatThrownBy(() -> analysisService.finalSaveAnalysis(1L, 1L, "최종 저장할 이력서 텍스트입니다."))
+        assertThatThrownBy(() -> analysisService.deleteAnalysisResult(1L, 1L))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ANALYSIS_RESULT_FORBIDDEN);
@@ -85,16 +70,16 @@ class AnalysisFinalSaveServiceTest {
         User user = User.createSocialUser(
                 null,
                 Provider.KAKAO,
-                "kakao-provider-id",
+                "kakao-provider-id-" + userId,
                 "카카오사용자"
         );
         ReflectionTestUtils.setField(user, "id", userId);
 
         UserResume userResume = UserResume.builder()
                 .user(user)
-                .resumeContent("기존 이력서 텍스트")
+                .resumeContent("이력서 텍스트")
                 .resumeFileName("resume.pdf")
-                .resumeFileSize(100L)
+                .resumeFileSize(480029L)
                 .build();
 
         JobDescription jobDescription = JobDescription.builder()

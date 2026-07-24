@@ -130,7 +130,7 @@ class AnalysisServiceTest {
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(analysisService, "extractResumeText", file))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.UNREADABLE_PDF_TEXT);
+                .isEqualTo(ErrorCode.RESUME_LOAD_FAILED);
     }
 
     @Test
@@ -155,7 +155,7 @@ class AnalysisServiceTest {
         ))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+                .isEqualTo(ErrorCode.INVALID_JOB_URL);
     }
 
     @Test
@@ -189,12 +189,24 @@ class AnalysisServiceTest {
                 "validateJobPostingInput",
                 JobInputType.TEXT,
                 null,
+                "a".repeat(6000),
+                null
+        ))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.JOB_TEXT_TOO_LONG);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.TEXT,
+                null,
                 "a".repeat(99),
                 null
         ))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+                .isEqualTo(ErrorCode.JOB_TEXT_TOO_SHORT);
     }
 
     @Test
@@ -223,6 +235,25 @@ class AnalysisServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
 
+        List<MockMultipartFile> invalidImages = List.of(new MockMultipartFile(
+                "jobImages",
+                "job-1.gif",
+                "image/gif",
+                "image".getBytes(StandardCharsets.UTF_8)
+        ));
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.IMAGE,
+                null,
+                null,
+                invalidImages
+        ))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_JOB_IMAGE_FORMAT);
+
         List<MockMultipartFile> tooManyImages = IntStream.rangeClosed(1, 11)
                 .mapToObj(index -> jobImage("job-" + index + ".png"))
                 .toList();
@@ -237,7 +268,16 @@ class AnalysisServiceTest {
         ))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+                .isEqualTo(ErrorCode.TOO_MANY_JOB_IMAGES);
+    }
+
+    @Test
+    @DisplayName("회사명 검색어가 공백이면 거부한다")
+    void getAnalysesRejectsBlankCompanyNameSearchKeyword() {
+        assertThatThrownBy(() -> analysisService.getAnalyses(1L, 0, 10, "   "))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.COMPANY_NAME_REQUIRED);
     }
 
     @Test

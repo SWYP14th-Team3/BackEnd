@@ -99,15 +99,21 @@ public class RequirementEvaluation {
 
     public void updateReanalysis(
             MatchStatus matchStatus,
+            String displayTitle,
             String resumeEvidence,
             String judgeReason,
+            String feedback,
+            String revisionSuggestion,
             Integer effectScore,
             Integer effortScore,
             BigDecimal priorityScore
     ) {
         this.matchStatus = matchStatus;
+        this.displayTitle = displayTitle;
         this.resumeEvidence = resumeEvidence;
         this.judgeReason = judgeReason;
+        this.feedback = feedback;
+        this.revisionSuggestion = revisionSuggestion;
         this.effectScore = effectScore;
         this.effortScore = effortScore;
         this.priorityScore = priorityScore;

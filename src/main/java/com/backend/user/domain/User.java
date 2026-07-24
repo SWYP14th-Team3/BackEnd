@@ -15,7 +15,6 @@ import java.util.Objects;
 @Table(
         name = "users",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_users_email", columnNames = "email"),
                 @UniqueConstraint(name = "uk_users_provider_provider_id", columnNames = {"provider", "provider_id"})
         }
 )

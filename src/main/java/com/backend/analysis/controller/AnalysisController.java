@@ -117,7 +117,7 @@ public class AnalysisController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @PostMapping("/{analysisResultId}/reanalysis")
+    @PostMapping("/{analysisResultId}/reanalyze")
     @SecurityRequirement(name = JWT_SECURITY_SCHEME_NAME)
     public ResponseEntity<ApiResponse<ReanalysisResponse>> reanalyze(
             @AuthenticationPrincipal UserPrincipal principal,

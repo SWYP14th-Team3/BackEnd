@@ -53,7 +53,7 @@ Content-Type: multipart/form-data
 재분석 엔드포인트:
 
 ```http
-POST /api/analyses/{analysisResultId}/reanalysis
+POST /api/analyses/{analysisResultId}/reanalyze
 Content-Type: application/json
 ```
 

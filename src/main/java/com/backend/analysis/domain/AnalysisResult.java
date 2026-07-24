@@ -101,6 +101,10 @@ public class AnalysisResult extends BaseTimeEntity {
         this.finalSavedAt = savedAt;
     }
 
+    public void clearFinalSavedAt() {
+        this.finalSavedAt = null;
+    }
+
     public LocalDateTime getLastSavedAt() {
         return finalSavedAt;
     }
@@ -126,6 +130,7 @@ public class AnalysisResult extends BaseTimeEntity {
         this.greenCount = greenCount;
         this.retryCount = this.retryCount + 1;
         this.lastReanalyzedAt = reanalyzedAt;
+        this.finalSavedAt = null;
     }
 
     public void delete(LocalDateTime deletedAt) {

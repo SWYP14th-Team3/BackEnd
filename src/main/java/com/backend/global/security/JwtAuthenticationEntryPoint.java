@@ -34,7 +34,20 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
         objectMapper.writeValue(
                 response.getWriter(),
-                ApiResponse.error(errorCode.getHttpStatus().value(), errorCode.getMessage())
+                ApiResponse.error(errorCode.getHttpStatus().value(), errorCode.name(), errorMessage(request, errorCode))
         );
+    }
+
+    private String errorMessage(HttpServletRequest request, ErrorCode errorCode) {
+        if (isResumeSaveRequest(request)) {
+            return "인증 정보가 유효하지 않거나 만료되었습니다.";
+        }
+
+        return errorCode.getMessage();
+    }
+
+    private boolean isResumeSaveRequest(HttpServletRequest request) {
+        return "PATCH".equalsIgnoreCase(request.getMethod())
+                && request.getRequestURI().matches("/api/analyses/[^/]+/resume");
     }
 }

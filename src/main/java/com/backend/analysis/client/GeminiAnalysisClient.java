@@ -59,13 +59,17 @@ public class GeminiAnalysisClient {
 
     public GeminiJobDescriptionResponse summarizeJobDescription(
             String prompt,
-            MultipartFile jobPostingImage
+            List<MultipartFile> jobPostingImages
     ) {
         // 채용공고 이미지가 있으면 Gemini에 같이 전달
         List<Map<String, Object>> parts = new ArrayList<>();
 
-        if (jobPostingImage != null && !jobPostingImage.isEmpty()) {
-            parts.add(inlineDataPart(jobPostingImage, resolveImageMimeType(jobPostingImage)));
+        if (jobPostingImages != null) {
+            for (MultipartFile jobPostingImage : jobPostingImages) {
+                if (jobPostingImage != null && !jobPostingImage.isEmpty()) {
+                    parts.add(inlineDataPart(jobPostingImage, resolveImageMimeType(jobPostingImage)));
+                }
+            }
         }
 
         parts.add(textPart(prompt));
@@ -285,14 +289,15 @@ public class GeminiAnalysisClient {
     }
 
     private Map<String, Object> jobDescriptionResponseSchema() {
-        // 채용공고 원문 확보 단계는 성공 여부와 원문 텍스트만 반환
+        // 채용공고 원문과 화면 표시용 요약을 반환
         return Map.of(
                 "type", "OBJECT",
                 "properties", Map.of(
                         "success", Map.of("type", "BOOLEAN"),
-                        "raw_text", Map.of("type", "STRING")
+                        "raw_text", Map.of("type", "STRING"),
+                        "summary_text", Map.of("type", "STRING")
                 ),
-                "required", List.of("success", "raw_text")
+                "required", List.of("success", "raw_text", "summary_text")
         );
     }
 

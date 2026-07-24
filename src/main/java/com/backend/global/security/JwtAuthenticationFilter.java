@@ -79,7 +79,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } catch (CustomException e) {
             SecurityContextHolder.clearContext();
-            writeErrorResponse(response, e.getErrorCode());
+            writeErrorResponse(request, response, e.getErrorCode());
         }
     }
 
@@ -93,14 +93,52 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return authorizationHeader.substring(BEARER_PREFIX.length());
     }
 
-    private void writeErrorResponse(HttpServletResponse response, ErrorCode errorCode) throws IOException {
-        response.setStatus(errorCode.getHttpStatus().value());
+    private void writeErrorResponse(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            ErrorCode errorCode
+    ) throws IOException {
+        ErrorCode responseErrorCode = responseErrorCode(request, errorCode);
+        response.setStatus(responseErrorCode.getHttpStatus().value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
 
         objectMapper.writeValue(
                 response.getWriter(),
-                ApiResponse.error(errorCode.getHttpStatus().value(), errorCode.getMessage())
+                ApiResponse.error(
+                        responseErrorCode.getHttpStatus().value(),
+                        responseErrorCode.name(),
+                        responseErrorMessage(request, responseErrorCode)
+                )
         );
+    }
+
+    private ErrorCode responseErrorCode(HttpServletRequest request, ErrorCode errorCode) {
+        if ((isLogoutRequest(request) || isResumeSaveRequest(request))
+                && (errorCode == ErrorCode.INVALID_TOKEN
+                || errorCode == ErrorCode.EXPIRED_TOKEN
+                || errorCode == ErrorCode.USER_NOT_FOUND)) {
+            return ErrorCode.UNAUTHORIZED;
+        }
+
+        return errorCode;
+    }
+
+    private boolean isLogoutRequest(HttpServletRequest request) {
+        return "POST".equalsIgnoreCase(request.getMethod())
+                && "/api/auth/logout".equals(request.getRequestURI());
+    }
+
+    private String responseErrorMessage(HttpServletRequest request, ErrorCode responseErrorCode) {
+        if (responseErrorCode == ErrorCode.UNAUTHORIZED && isResumeSaveRequest(request)) {
+            return "인증 정보가 유효하지 않거나 만료되었습니다.";
+        }
+
+        return responseErrorCode.getMessage();
+    }
+
+    private boolean isResumeSaveRequest(HttpServletRequest request) {
+        return "PATCH".equalsIgnoreCase(request.getMethod())
+                && request.getRequestURI().matches("/api/analyses/[^/]+/resume");
     }
 }

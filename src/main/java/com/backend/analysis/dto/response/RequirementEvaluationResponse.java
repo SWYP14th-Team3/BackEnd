@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 public class RequirementEvaluationResponse {
 
     private Long evaluationId;
-    private MatchStatus matchStatus;
+    private String matchStatus;
     private String displayTitle;
     private String resumeEvidence;
     private String judgeReason;
@@ -26,7 +26,7 @@ public class RequirementEvaluationResponse {
     public static RequirementEvaluationResponse from(RequirementEvaluation evaluation) {
         return RequirementEvaluationResponse.builder()
                 .evaluationId(evaluation.getId())
-                .matchStatus(evaluation.getMatchStatus())
+                .matchStatus(toApiMatchStatus(evaluation.getMatchStatus()))
                 .displayTitle(evaluation.getDisplayTitle())
                 .resumeEvidence(evaluation.getResumeEvidence())
                 .judgeReason(evaluation.getJudgeReason())
@@ -37,5 +37,13 @@ public class RequirementEvaluationResponse {
                 .priorityScore(evaluation.getPriorityScore())
                 .sortOrder(evaluation.getSortOrder())
                 .build();
+    }
+
+    private static String toApiMatchStatus(MatchStatus matchStatus) {
+        return switch (matchStatus) {
+            case green -> "CONFIRMED";
+            case yellow -> "NEEDS_IMPROVEMENT";
+            case red -> "MISSING";
+        };
     }
 }

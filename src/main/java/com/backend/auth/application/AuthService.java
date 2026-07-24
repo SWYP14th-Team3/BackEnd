@@ -21,7 +21,6 @@ import com.backend.user.infrastructure.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -88,11 +87,6 @@ public class AuthService {
     }
 
     private User createNewUser(SocialUserInfo socialUserInfo) {
-        if (StringUtils.hasText(socialUserInfo.getEmail())
-                && userRepository.existsByEmail(socialUserInfo.getEmail())) {
-            throw new CustomException(ErrorCode.ALREADY_REGISTERED_EMAIL);
-        }
-
         User user = User.createSocialUser(
                 socialUserInfo.getEmail(),
                 socialUserInfo.getProvider(),

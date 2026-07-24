@@ -92,13 +92,14 @@ public class AnalysisService {
             String companyName
     ) {
         validatePageRequest(page, size);
+        validateCompanyNameSearchKeyword(companyName);
 
         User user = findUser(userId);
 
         PageRequest pageRequest = PageRequest.of(page, size);
         Page<AnalysisResult> analysisResults;
 
-        if (companyName == null || companyName.isBlank()) {
+        if (companyName == null) {
             analysisResults = analysisResultRepository.findAllByUserAndDeletedAtIsNullOrderByCreatedAtDesc(
                     user,
                     pageRequest
@@ -139,25 +140,49 @@ public class AnalysisService {
 
         User user = findUser(userId);
 
-        String resumeText = extractResumeText(resumeFile);
+        String resumeText = null;
+        CustomException resumeLoadFailure = null;
+        try {
+            resumeText = extractResumeText(resumeFile);
+        } catch (CustomException e) {
+            if (e.getErrorCode() != ErrorCode.RESUME_LOAD_FAILED) {
+                throw e;
+            }
+            resumeLoadFailure = e;
+        }
+
+        JobPostingDraft jobPostingDraft = null;
+        CustomException jobPostingLoadFailure = null;
+        try {
+            jobPostingDraft = loadJobPostingDraft(jobInputType, jobUrl, jobText, jobImages);
+        } catch (CustomException e) {
+            if (e.getErrorCode() != ErrorCode.JOB_POSTING_LOAD_FAILED) {
+                throw e;
+            }
+            jobPostingLoadFailure = e;
+        }
+
+        if (resumeLoadFailure != null && jobPostingLoadFailure != null) {
+            throw new CustomException(ErrorCode.RESUME_AND_JOB_POSTING_LOAD_FAILED);
+        }
+        if (resumeLoadFailure != null) {
+            throw resumeLoadFailure;
+        }
+        if (jobPostingLoadFailure != null) {
+            throw jobPostingLoadFailure;
+        }
+
         UserResume resume = userResumeRepository.save(
                 UserResume.builder()
                         .user(user)
                         .resumeContent(resumeText)
-                        .resumeFileName(buildResumeFileName(resumeFile.getOriginalFilename()))
+                        .resumeFileName(resumeFile.getOriginalFilename())
                         .resumeFileSize(resumeFile.getSize())
                         .build()
         );
 
-        MultipartFile jobPostingImage = firstPresentImage(jobImages);
-        String crawledText = crawlJobPostingText(jobInputType, jobUrl, jobText);
-        String platform = jobPostingCrawler.extractPlatform(jobUrl);
-        GeminiJobDescriptionResponse jobDescriptionResponse = geminiAnalysisClient.summarizeJobDescription(
-                buildJobDescriptionPrompt(jobUrl, crawledText, platform),
-                jobPostingImage
-        );
-        validateJobDescriptionResponse(jobDescriptionResponse);
-
+        GeminiJobDescriptionResponse jobDescriptionResponse = jobPostingDraft.jobDescriptionResponse();
+        String platform = jobPostingDraft.platform();
         String jobPostingRawText = jobDescriptionResponse.jdContent().trim();
         JobDescription jobDescription = jobDescriptionRepository.save(
                 JobDescription.builder()
@@ -168,27 +193,34 @@ public class AnalysisService {
                         .positionTitle(jobDescriptionResponse.positionTitle())
                         .jobPlatform(defaultIfBlank(jobDescriptionResponse.jobPlatform(), platform))
                         .jdOriginalText(jobPostingRawText)
-                        .jdSummaryText(jobPostingRawText)
+                        .jdSummaryText(defaultIfBlank(jobDescriptionResponse.summaryText(), jobPostingRawText))
                         .build()
         );
         saveJobPostingImages(jobDescription, jobImages);
 
-        GeminiAnalysisResponse analysisResponse = geminiAnalysisClient.analyze(
-                buildAnalysisPrompt(resume.getResumeContent(), jobDescription.getJdContent())
-        );
-        validateAnalysisResponse(analysisResponse);
-        jobDescription.updateExtractedInfo(analysisResponse.company(), analysisResponse.position());
-        Map<String, GeminiPriorityScoreResult> priorityScoreByReqId = scoreRedYellowRequirements(
-                analysisResponse.requirements(),
-                jobDescription.getJdContent(),
-                resume.getResumeContent()
-        );
-        Map<String, GeminiCardContentResult> cardContentByReqId = createCardContents(
-                analysisResponse.requirements(),
-                priorityScoreByReqId,
-                jobDescription.getJdContent(),
-                resume.getResumeContent()
-        );
+        GeminiAnalysisResponse analysisResponse;
+        Map<String, GeminiPriorityScoreResult> priorityScoreByReqId;
+        Map<String, GeminiCardContentResult> cardContentByReqId;
+        try {
+            analysisResponse = geminiAnalysisClient.analyze(
+                    buildAnalysisPrompt(resume.getResumeContent(), jobDescription.getJdContent())
+            );
+            validateAnalysisResponse(analysisResponse);
+            jobDescription.updateExtractedInfo(analysisResponse.company(), analysisResponse.position());
+            priorityScoreByReqId = scoreRedYellowRequirements(
+                    analysisResponse.requirements(),
+                    jobDescription.getJdContent(),
+                    resume.getResumeContent()
+            );
+            cardContentByReqId = createCardContents(
+                    analysisResponse.requirements(),
+                    priorityScoreByReqId,
+                    jobDescription.getJdContent(),
+                    resume.getResumeContent()
+            );
+        } catch (CustomException e) {
+            throw new CustomException(ErrorCode.ANALYSIS_FAILED);
+        }
 
         CountResult countResult = countStatus(analysisResponse.requirements());
         AnalysisResult analysisResult = analysisResultRepository.save(
@@ -221,6 +253,7 @@ public class AnalysisService {
 
         LocalDateTime savedAt = LocalDateTime.now();
         analysisResult.getUserResume().updateResumeContent(resumeCurrentText, savedAt);
+        analysisResult.clearFinalSavedAt();
         analysisResultRepository.flush();
 
         return AnalysisSaveResponse.from(analysisResult);
@@ -242,32 +275,50 @@ public class AnalysisService {
         }
 
         String trimmedResumeText = resumeCurrentText.trim();
-        GeminiAnalysisResponse reanalysisResponse = geminiAnalysisClient.reanalyze(
-                buildReanalysisPrompt(existingRequirements, trimmedResumeText)
-        );
-        validateReanalysisResponse(reanalysisResponse, existingRequirements);
+        GeminiAnalysisResponse reanalysisResponse;
+        Map<String, GeminiRequirementResult> resultByReqId;
+        Map<String, GeminiPriorityScoreResult> priorityScoreByReqId;
+        Map<String, GeminiCardContentResult> cardContentByReqId;
+        try {
+            reanalysisResponse = geminiAnalysisClient.reanalyze(
+                    buildReanalysisPrompt(existingRequirements, trimmedResumeText)
+            );
+            validateReanalysisResponse(reanalysisResponse, existingRequirements);
 
-        Map<String, GeminiRequirementResult> resultByReqId = new HashMap<>();
-        for (GeminiRequirementResult item : reanalysisResponse.requirements()) {
-            resultByReqId.put(item.reqId(), item);
+            resultByReqId = new HashMap<>();
+            for (GeminiRequirementResult item : reanalysisResponse.requirements()) {
+                resultByReqId.put(item.reqId(), item);
+            }
+            priorityScoreByReqId = scoreRedYellowRequirements(
+                    reanalysisResponse.requirements(),
+                    analysisResult.getJobDescription().getJdContent(),
+                    trimmedResumeText
+            );
+            cardContentByReqId = createCardContents(
+                    reanalysisResponse.requirements(),
+                    priorityScoreByReqId,
+                    analysisResult.getJobDescription().getJdContent(),
+                    trimmedResumeText
+            );
+        } catch (CustomException e) {
+            throw new CustomException(ErrorCode.REANALYSIS_FAILED);
         }
-        Map<String, GeminiPriorityScoreResult> priorityScoreByReqId = scoreRedYellowRequirements(
-                reanalysisResponse.requirements(),
-                analysisResult.getJobDescription().getJdContent(),
-                trimmedResumeText
-        );
 
         for (JobRequirement requirement : existingRequirements) {
             GeminiRequirementResult item = resultByReqId.get(reanalysisReqId(requirement));
             MatchStatus matchStatus = parseMatchStatus(item.matchStatus());
             GeminiPriorityScoreResult priorityScore = priorityScoreByReqId.get(item.reqId());
+            GeminiCardContentResult cardContent = cardContentByReqId.get(item.reqId());
             RequirementEvaluation evaluation = requirementEvaluationRepository.findByJobRequirement(requirement)
                     .orElseThrow(() -> new CustomException(ErrorCode.ANALYSIS_RESULT_NOT_FOUND));
 
             evaluation.updateReanalysis(
                     matchStatus,
+                    defaultIfBlank(cardContent != null ? cardContent.title() : null, requirement.getTitle()),
                     defaultIfBlank(item.resumeEvidence(), "없음"),
                     item.judgeReason(),
+                    defaultIfBlank(cardContent != null ? cardContent.feedback() : null, item.feedback()),
+                    normalizeEvaluationText(matchStatus, item.revisionSuggestion()),
                     priorityScore != null ? normalizeScore(priorityScore.effect_score()) : null,
                     priorityScore != null ? normalizeScore(priorityScore.effort_score()) : null,
                     calculatePriorityScore(priorityScore)
@@ -350,9 +401,15 @@ public class AnalysisService {
         }
     }
 
+    private void validateCompanyNameSearchKeyword(String companyName) {
+        if (companyName != null && companyName.isBlank()) {
+            throw new CustomException(ErrorCode.COMPANY_NAME_REQUIRED);
+        }
+    }
+
     private void validateRetryCount(AnalysisResult analysisResult) {
         if (analysisResult.getRetryCount() >= MAX_RETRY_COUNT) {
-            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+            throw new CustomException(ErrorCode.REANALYSIS_RETRY_LIMIT_EXCEEDED);
         }
     }
 
@@ -364,7 +421,7 @@ public class AnalysisService {
     ) {
         List<JobRequirementResponse> responses = new ArrayList<>();
 
-        int inputOrder = 0;
+        int inputOrder = 1;
         for (GeminiRequirementResult item : requirementResults) {
             MatchStatus matchStatus = parseMatchStatus(item.matchStatus());
             RequirementCategory category = parseRequirementCategory(item.category());
@@ -482,7 +539,7 @@ public class AnalysisService {
     }
 
     private int statusSortGroup(JobRequirementResponse response) {
-        return response.getEvaluation().getMatchStatus() == MatchStatus.green ? 1 : 0;
+        return "CONFIRMED".equals(response.getEvaluation().getMatchStatus()) ? 1 : 0;
     }
 
     private BigDecimal prioritySortValue(JobRequirementResponse response) {
@@ -535,7 +592,7 @@ public class AnalysisService {
 
             String text = normalizeExtractedPdfText(textStripper.getText(document));
             if (!hasText(text)) {
-                throw new CustomException(ErrorCode.UNREADABLE_PDF_TEXT);
+                throw new CustomException(ErrorCode.RESUME_LOAD_FAILED);
             }
 
             return text;
@@ -543,7 +600,7 @@ public class AnalysisService {
             throw e;
         } catch (IOException e) {
             log.warn("Failed to extract text from resume PDF, partName={}", resumePdf.getName(), e);
-            throw new CustomException(ErrorCode.UNREADABLE_PDF_TEXT);
+            throw new CustomException(ErrorCode.RESUME_LOAD_FAILED);
         }
     }
 
@@ -590,6 +647,27 @@ public class AnalysisService {
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
     }
 
+    private JobPostingDraft loadJobPostingDraft(
+            JobInputType jobInputType,
+            String jobUrl,
+            String jobText,
+            List<MultipartFile> jobImages
+    ) {
+        List<MultipartFile> presentJobImages = presentImages(jobImages);
+        try {
+            String crawledText = crawlJobPostingText(jobInputType, jobUrl, jobText);
+            String platform = jobPostingCrawler.extractPlatform(jobUrl);
+            GeminiJobDescriptionResponse jobDescriptionResponse = geminiAnalysisClient.summarizeJobDescription(
+                    buildJobDescriptionPrompt(jobUrl, crawledText, platform),
+                    presentJobImages
+            );
+            validateJobDescriptionResponse(jobDescriptionResponse);
+            return new JobPostingDraft(platform, jobDescriptionResponse);
+        } catch (CustomException e) {
+            throw new CustomException(ErrorCode.JOB_POSTING_LOAD_FAILED);
+        }
+    }
+
     private void validateJobPostingInput(
             JobInputType jobInputType,
             String jobUrl,
@@ -602,24 +680,33 @@ public class AnalysisService {
 
         boolean hasUrl = hasText(jobUrl);
         boolean hasJobText = hasText(jobText);
-        boolean hasJobImage = firstPresentImage(jobImages) != null;
-        int jobImageCount = presentImages(jobImages).size();
+        List<MultipartFile> presentImages = presentImages(jobImages);
+        boolean hasJobImage = !presentImages.isEmpty();
+        int jobImageCount = presentImages.size();
 
         if (jobImageCount > MAX_JOB_IMAGE_COUNT) {
-            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+            throw new CustomException(ErrorCode.TOO_MANY_JOB_IMAGES);
         }
+
+        validateJobImageFormats(presentImages);
 
         if (jobInputType == JobInputType.URL) {
             if (!hasUrl || hasJobText || hasJobImage || !isHttpUrl(jobUrl)) {
-                throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+                throw new CustomException(ErrorCode.INVALID_JOB_URL);
             }
 
             return;
         }
 
         if (jobInputType == JobInputType.TEXT) {
-            if (hasUrl || !hasJobText || hasJobImage || !isValidJobTextLength(jobText)) {
+            if (hasUrl || hasJobImage) {
                 throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+            }
+            if (!hasJobText || jobText.trim().length() < 100) {
+                throw new CustomException(ErrorCode.JOB_TEXT_TOO_SHORT);
+            }
+            if (jobText.trim().length() >= 6000) {
+                throw new CustomException(ErrorCode.JOB_TEXT_TOO_LONG);
             }
 
             return;
@@ -636,6 +723,37 @@ public class AnalysisService {
         throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
     }
 
+    private void validateJobImageFormats(List<MultipartFile> jobImages) {
+        for (MultipartFile image : jobImages) {
+            if (!isJpgOrPngImage(image)) {
+                throw new CustomException(ErrorCode.INVALID_JOB_IMAGE_FORMAT);
+            }
+        }
+    }
+
+    private boolean isJpgOrPngImage(MultipartFile image) {
+        String contentType = image.getContentType();
+        boolean hasContentType = hasText(contentType);
+        boolean validContentType = "image/jpeg".equalsIgnoreCase(contentType)
+                || "image/jpg".equalsIgnoreCase(contentType)
+                || "image/png".equalsIgnoreCase(contentType);
+        if (hasContentType && !validContentType) {
+            return false;
+        }
+
+        String originalFilename = image.getOriginalFilename();
+        boolean hasFilename = hasText(originalFilename);
+        String lowerFilename = hasFilename ? originalFilename.toLowerCase() : "";
+        boolean validExtension = lowerFilename.endsWith(".jpg")
+                || lowerFilename.endsWith(".jpeg")
+                || lowerFilename.endsWith(".png");
+        if (hasFilename && !validExtension) {
+            return false;
+        }
+
+        return validContentType || validExtension;
+    }
+
     private void saveJobPostingImages(JobDescription jobDescription, List<MultipartFile> jobImages) {
         List<MultipartFile> presentImages = presentImages(jobImages);
         for (int i = 0; i < presentImages.size(); i++) {
@@ -645,7 +763,7 @@ public class AnalysisService {
                     .originalFileName(defaultIfBlank(image.getOriginalFilename(), "job-image-" + (i + 1)))
                     .contentType(defaultIfBlank(image.getContentType(), "application/octet-stream"))
                     .fileSize(image.getSize())
-                    .imageOrder(i)
+                    .imageOrder(i + 1)
                     .build());
         }
     }
@@ -713,12 +831,6 @@ public class AnalysisService {
         return jobPostingCrawler.extractText(jobUrl.trim());
     }
 
-    private MultipartFile firstPresentImage(List<MultipartFile> jobImages) {
-        return presentImages(jobImages).stream()
-                .findFirst()
-                .orElse(null);
-    }
-
     private List<MultipartFile> presentImages(List<MultipartFile> jobImages) {
         if (jobImages == null || jobImages.isEmpty()) {
             return List.of();
@@ -732,11 +844,6 @@ public class AnalysisService {
     private boolean isHttpUrl(String url) {
         String trimmed = url.trim();
         return trimmed.startsWith("http://") || trimmed.startsWith("https://");
-    }
-
-    private boolean isValidJobTextLength(String jobText) {
-        int length = jobText.trim().length();
-        return length >= 100 && length < 6000;
     }
 
     private CountResult countStatus(List<GeminiRequirementResult> requirements) {
@@ -932,10 +1039,13 @@ public class AnalysisService {
     }
 
     private Satisfaction parseSatisfaction(String satisfactionValue) {
+        if (satisfactionValue == null) {
+            return null;
+        }
+
         return switch (satisfactionValue.trim()) {
             case "LIKE" -> Satisfaction.LIKE;
             case "DISLIKE" -> Satisfaction.DISLIKE;
-            case "NULL" -> null;
             default -> throw new CustomException(ErrorCode.INVALID_ANALYSIS_SATISFACTION);
         };
     }
@@ -998,7 +1108,7 @@ public class AnalysisService {
         return """
                 # 역할
                 너는 채용 공고 입력 처리기다. 입력이 URL, 붙여넣은 텍스트,
-                이미지 중 무엇이든 공고의 원문 텍스트를 그대로 확보한다.
+                이미지 중 무엇이든 공고의 원문 텍스트와 화면 표시용 요약을 확보한다.
 
                 # 입력 종류별 처리
                 - URL: 페이지를 읽어 공고 본문 텍스트를 가져온다.
@@ -1006,9 +1116,9 @@ public class AnalysisService {
                 - 이미지: 이미지 속 공고 내용을 읽어(OCR) 텍스트로 옮긴다.
 
                 # 규칙
-                - 공고 본문을 있는 그대로 확보한다. 이 단계에서는 요약·분류·삭제하지 마라.
-                  (요건 추출은 다음 단계가 한다)
-                - 원문의 줄·항목 구조를 최대한 보존한다.
+                - raw_text에는 공고 본문을 있는 그대로 담는다. 원문의 줄·항목 구조를 최대한 보존한다.
+                - summary_text에는 원문을 바탕으로 회사명, 포지션, 주요 업무, 자격요건, 우대사항을 마크다운으로 정리한다.
+                - summary_text에 원문에 없는 내용을 지어내지 마라.
                 - 이미지의 경우 글자를 임의로 지어내지 마라. 안 보이면 안 보인다고 하라.
 
                 # 불러오기 실패 판정
@@ -1022,9 +1132,9 @@ public class AnalysisService {
                 # 출력
                 JSON 객체 하나만 반환해. 코드블록과 JSON 밖 설명은 쓰지 마.
                 성공 시:
-                { "success": true, "raw_text": "공고 원문 전체 텍스트" }
+                { "success": true, "raw_text": "공고 원문 전체 텍스트", "summary_text": "공고 요약 마크다운" }
                 실패 시:
-                { "success": false, "raw_text": "" }
+                { "success": false, "raw_text": "", "summary_text": "" }
 
                 현재 시점: %s
                 채용 플랫폼 추정값: %s
@@ -1366,6 +1476,12 @@ public class AnalysisService {
             int redCount,
             int yellowCount,
             int greenCount
+    ) {
+    }
+
+    private record JobPostingDraft(
+            String platform,
+            GeminiJobDescriptionResponse jobDescriptionResponse
     ) {
     }
 }

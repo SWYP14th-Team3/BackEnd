@@ -28,7 +28,7 @@
 <!-- 리뷰어가 알아야 할 API, DB, 설정 변경이나 집중해서 볼 부분이 있다면 작성해 주세요. 없다면 `없음`으로 작성해 주세요. -->
 
 - 신규 분석 API: `POST /api/analyses`
-- 신규 재분석 API: `POST /api/analyses/{analysisResultId}/reanalysis`
+- 신규 재분석 API: `POST /api/analyses/{analysisResultId}/reanalyze`
 - 재분석 요청값: `resumeCurrentText`
 - 재분석은 `retryCount` 기준 최대 5회까지 허용됩니다.
 - 기본 Gemini 모델은 `gemini-3.1-flash-lite`로 설정되어 있습니다.

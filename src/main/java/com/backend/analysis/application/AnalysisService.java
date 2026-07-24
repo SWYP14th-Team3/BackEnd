@@ -469,7 +469,7 @@ public class AnalysisService {
         List<GeminiRequirementResult> scoringTargets = requirementResults.stream()
                 .filter(requirement -> {
                     MatchStatus status = parseMatchStatus(requirement.matchStatus());
-                    return status == MatchStatus.red || status == MatchStatus.yellow;
+                    return status == MatchStatus.MISSING || status == MatchStatus.NEEDS_IMPROVEMENT;
                 })
                 .toList();
 
@@ -854,11 +854,11 @@ public class AnalysisService {
         for (GeminiRequirementResult requirement : requirements) {
             MatchStatus status = parseMatchStatus(requirement.matchStatus());
 
-            if (status == MatchStatus.red) {
+            if (status == MatchStatus.MISSING) {
                 red++;
-            } else if (status == MatchStatus.yellow) {
+            } else if (status == MatchStatus.NEEDS_IMPROVEMENT) {
                 yellow++;
-            } else if (status == MatchStatus.green) {
+            } else if (status == MatchStatus.CONFIRMED) {
                 green++;
             }
         }
@@ -883,7 +883,7 @@ public class AnalysisService {
             } else {
                 requiredCount++;
                 requiredScoreSum += score;
-                if (status == MatchStatus.red) {
+                if (status == MatchStatus.MISSING) {
                     requiredRedCount++;
                 }
             }
@@ -919,7 +919,7 @@ public class AnalysisService {
             } else {
                 requiredCount++;
                 requiredScoreSum += score;
-                if (status == MatchStatus.red) {
+                if (status == MatchStatus.MISSING) {
                     requiredRedCount++;
                 }
             }
@@ -966,9 +966,9 @@ public class AnalysisService {
 
     private double matchScore(MatchStatus status) {
         return switch (status) {
-            case green -> 1.0;
-            case yellow -> 0.7;
-            case red -> 0.0;
+            case CONFIRMED -> 1.0;
+            case NEEDS_IMPROVEMENT -> 0.7;
+            case MISSING -> 0.0;
         };
     }
 
@@ -1005,17 +1005,17 @@ public class AnalysisService {
                 || "met".equalsIgnoreCase(status)
                 || "CONFIRMED".equalsIgnoreCase(status)
                 || "확인됨".equals(status)) {
-            return MatchStatus.green;
+            return MatchStatus.CONFIRMED;
         }
 
         if ("red".equalsIgnoreCase(status)
                 || "gap".equalsIgnoreCase(status)
                 || "MISSING".equalsIgnoreCase(status)
                 || "없음".equals(status)) {
-            return MatchStatus.red;
+            return MatchStatus.MISSING;
         }
 
-        return MatchStatus.yellow;
+        return MatchStatus.NEEDS_IMPROVEMENT;
     }
 
     private Integer normalizeScore(Integer score) {
@@ -1051,7 +1051,7 @@ public class AnalysisService {
     }
 
     private String normalizeEvaluationText(MatchStatus matchStatus, String value) {
-        if (matchStatus == MatchStatus.green) {
+        if (matchStatus == MatchStatus.CONFIRMED) {
             return null;
         }
 

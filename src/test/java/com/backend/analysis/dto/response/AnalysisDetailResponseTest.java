@@ -91,7 +91,7 @@ class AnalysisDetailResponseTest {
 
         RequirementEvaluation evaluation = RequirementEvaluation.builder()
                 .jobRequirement(requirement)
-                .matchStatus(MatchStatus.yellow)
+                .matchStatus(MatchStatus.NEEDS_IMPROVEMENT)
                 .displayTitle("Spring Boot 경험을 더 구체화하세요")
                 .resumeEvidence("Spring Boot 프로젝트 경험은 있으나 구체적인 역할 설명이 부족함")
                 .judgeReason("Spring Boot 경험은 확인되지만 공고가 요구하는 실무 적용 근거가 부족합니다.")

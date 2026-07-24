@@ -28,7 +28,7 @@ class JobRequirementResponseTest {
 
         RequirementEvaluation evaluation = RequirementEvaluation.builder()
                 .jobRequirement(requirement)
-                .matchStatus(MatchStatus.yellow)
+                .matchStatus(MatchStatus.NEEDS_IMPROVEMENT)
                 .displayTitle("Spring Boot 경험을 더 구체화하세요")
                 .resumeEvidence("Spring Boot 프로젝트 경험")
                 .judgeReason("Spring Boot 경험은 확인되지만 실무 근거가 부족합니다.")
@@ -69,7 +69,7 @@ class JobRequirementResponseTest {
 
         RequirementEvaluation evaluation = RequirementEvaluation.builder()
                 .jobRequirement(requirement)
-                .matchStatus(MatchStatus.green)
+                .matchStatus(MatchStatus.CONFIRMED)
                 .displayTitle("AWS 배포 경험이 확인됐어요")
                 .resumeEvidence("AWS EC2와 Docker를 이용한 Spring Boot 서버 배포 경험 확인")
                 .judgeReason("공고의 우대사항과 관련된 AWS 배포 경험이 이력서에서 확인됩니다.")

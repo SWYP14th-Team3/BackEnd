@@ -1,6 +1,5 @@
 package com.backend.analysis.dto.response;
 
-import com.backend.analysis.domain.MatchStatus;
 import com.backend.analysis.domain.RequirementEvaluation;
 import lombok.Builder;
 import lombok.Getter;
@@ -26,7 +25,7 @@ public class RequirementEvaluationResponse {
     public static RequirementEvaluationResponse from(RequirementEvaluation evaluation) {
         return RequirementEvaluationResponse.builder()
                 .evaluationId(evaluation.getId())
-                .matchStatus(toApiMatchStatus(evaluation.getMatchStatus()))
+                .matchStatus(evaluation.getMatchStatus().name())
                 .displayTitle(evaluation.getDisplayTitle())
                 .resumeEvidence(evaluation.getResumeEvidence())
                 .judgeReason(evaluation.getJudgeReason())
@@ -39,11 +38,4 @@ public class RequirementEvaluationResponse {
                 .build();
     }
 
-    private static String toApiMatchStatus(MatchStatus matchStatus) {
-        return switch (matchStatus) {
-            case green -> "CONFIRMED";
-            case yellow -> "NEEDS_IMPROVEMENT";
-            case red -> "MISSING";
-        };
-    }
 }

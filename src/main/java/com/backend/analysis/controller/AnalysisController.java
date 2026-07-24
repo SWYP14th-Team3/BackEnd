@@ -90,7 +90,7 @@ public class AnalysisController {
             @RequestParam(required = false) String jobText
     ) {
         AnalysisDetailResponse response = analysisService.createAnalysis(
-                principal != null ? principal.getUserId() : 1L,
+                principal.getUserId(),
                 jobInputType,
                 jobUrl,
                 jobText,

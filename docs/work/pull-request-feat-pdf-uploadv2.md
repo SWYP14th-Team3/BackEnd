@@ -19,16 +19,16 @@
 
 <!-- 실행한 테스트 또는 직접 확인한 내용을 작성해 주세요. -->
 
-- [x] 테스트 코드 실행
+- [x] 컴파일 및 핵심 단위 테스트 실행
 - [ ] 직접 동작 확인
-- 확인 내용: `./gradlew test` 실행 결과 `BUILD SUCCESSFUL` 확인
+- 확인 내용: `./gradlew compileJava compileTestJava`, 분석 서비스/응답 DTO/유저 도메인 단위 테스트 성공
 
 ## 참고 사항
 
 <!-- 리뷰어가 알아야 할 API, DB, 설정 변경이나 집중해서 볼 부분이 있다면 작성해 주세요. 없다면 `없음`으로 작성해 주세요. -->
 
 - 신규 분석 API: `POST /api/analyses`
-- 신규 재분석 API: `POST /api/analysesRe`
-- 재분석 요청값: `analysis_result_id`, `resume_content`, `jd_content`
+- 신규 재분석 API: `POST /api/analyses/{analysisResultId}/reanalysis`
+- 재분석 요청값: `resumeCurrentText`
 - 재분석은 `retryCount` 기준 최대 5회까지 허용됩니다.
 - 기본 Gemini 모델은 `gemini-3.1-flash-lite`로 설정되어 있습니다.

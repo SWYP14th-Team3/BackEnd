@@ -112,7 +112,7 @@ class AnalysisRepositoryTest {
 
         RequirementEvaluation evaluation = RequirementEvaluation.builder()
                 .jobRequirement(savedJobRequirement)
-                .matchStatus(MatchStatus.NEEDS_IMPROVEMENT)
+                .matchStatus(MatchStatus.yellow)
                 .resumeEvidence("이력서에 Spring 프로젝트 경험이 일부 존재함")
                 .feedback("Spring Boot 경험은 확인되지만 구체적인 성과가 부족합니다.")
                 .revisionSuggestion("프로젝트에서 담당한 API 구현 내용과 성과를 추가하세요.")
@@ -141,7 +141,7 @@ class AnalysisRepositoryTest {
         assertThat(requirements).hasSize(1);
         assertThat(requirements.get(0).getTitle()).isEqualTo("Spring Boot 개발 경험");
 
-        assertThat(foundEvaluation.getMatchStatus()).isEqualTo(MatchStatus.NEEDS_IMPROVEMENT);
+        assertThat(foundEvaluation.getMatchStatus()).isEqualTo(MatchStatus.yellow);
         assertThat(foundEvaluation.getFeedback()).contains("구체적인 성과가 부족");
     }
 
@@ -326,7 +326,7 @@ class AnalysisRepositoryTest {
 
         requirementEvaluationRepository.save(RequirementEvaluation.builder()
                 .jobRequirement(requirement)
-                .matchStatus(MatchStatus.NEEDS_IMPROVEMENT)
+                .matchStatus(MatchStatus.yellow)
                 .resumeEvidence("Spring Boot 경험 일부 확인")
                 .feedback("구체적인 역할이 부족합니다.")
                 .revisionSuggestion("구현한 API를 구체적으로 작성하세요.")

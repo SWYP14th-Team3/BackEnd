@@ -19,6 +19,7 @@ import com.backend.analysis.dto.GeminiCardContentResult;
 import com.backend.analysis.dto.GeminiJobDescriptionResponse;
 import com.backend.analysis.dto.GeminiPriorityScoreResult;
 import com.backend.analysis.dto.GeminiRequirementResult;
+import com.backend.analysis.dto.GeminiResumeResponse;
 import com.backend.analysis.dto.response.AnalysisDeleteResponse;
 import com.backend.analysis.dto.response.AnalysisDetailResponse;
 import com.backend.analysis.dto.response.AnalysisFinalSaveResponse;
@@ -143,7 +144,7 @@ public class AnalysisService {
         String resumeText = null;
         CustomException resumeLoadFailure = null;
         try {
-            resumeText = extractResumeText(resumeFile);
+            resumeText = summarizeResumeText(resumeFile);
         } catch (CustomException e) {
             if (e.getErrorCode() != ErrorCode.RESUME_LOAD_FAILED) {
                 throw e;
@@ -616,6 +617,26 @@ public class AnalysisService {
                 .replace("\r\n", "\n")
                 .replace('\r', '\n')
                 .trim();
+    }
+
+    private String summarizeResumeText(MultipartFile resumePdf) {
+        try {
+            GeminiResumeResponse resumeResponse = geminiAnalysisClient.summarizeResume(
+                    resumePdf,
+                    buildResumePrompt(resumePdf.getOriginalFilename())
+            );
+
+            if (resumeResponse == null || !hasText(resumeResponse.resumeContent())) {
+                throw new CustomException(ErrorCode.RESUME_LOAD_FAILED);
+            }
+
+            return resumeResponse.resumeContent().trim();
+        } catch (CustomException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            log.warn("Failed to summarize resume PDF with Gemini, partName={}", resumePdf.getName(), e);
+            throw new CustomException(ErrorCode.RESUME_LOAD_FAILED);
+        }
     }
 
     private int findPdfHeaderOffset(MultipartFile resumePdf) {
@@ -1103,17 +1124,52 @@ public class AnalysisService {
 
     private String buildResumePrompt(String originalFilename) {
         return """
-                주어진 이력서 PDF를 읽고 개발자 이력서 분석에 필요한 텍스트로 정리해줘.
+                주어진 이력서 PDF를 읽고 개발자 이력서 분석에 필요한 형태로 재정리해줘.
                 JSON 객체 하나만 반환하고 코드블록이나 설명은 쓰지 마.
 
                 작성 규칙:
-                - 기술스택, 프로젝트, 경력, 학력, 활동을 마크다운으로 구분한다.
-                - 프로젝트는 기간, 역할, 기술, 성과를 포함한다.
+                - resumeContent는 아래 이력서 양식만 담는다.
+                - PDF에 있는 이름, 연락처, 이메일을 최상단에 배치한다.
+                - 섹션 순서는 PROFESSIONAL SUMMARY, SKILLS, WORK EXPERIENCE, PROJECTS, EDUCATION 순서로 작성한다.
+                - PROFESSIONAL SUMMARY는 개발자 강점이 드러나도록 3~5문장으로 정리한다.
+                - SKILLS는 Languages & Frameworks, Database, DevOps & Tools, AI Collaboration 같은 묶음으로 정리한다.
+                - WORK EXPERIENCE는 회사명 | 역할 | 기간 형식으로 쓰고, 주요 성과는 ● bullet로 작성한다.
+                - PROJECTS는 과정명이나 프로젝트명 | 상태 또는 기간 형식으로 쓰고, 성과는 ● bullet로 작성한다.
+                - EDUCATION은 학교명 | 전공/상태 형식으로 작성한다.
+                - 숫자 성과, 기간, 기술명은 원문에 있는 내용을 우선 사용한다.
+                - 원문에 없는 경력, 수치, 기술, 연락처를 지어내지 마라.
+                - 해당 섹션의 근거가 없으면 섹션 제목은 유지하되 "기재된 내용 없음"이라고 작성한다.
                 - 깨진 줄바꿈은 자연스럽게 정리한다.
+
+                resumeContent 양식:
+                이름
+                전화번호 | 이메일
+
+                PROFESSIONAL SUMMARY
+                "한 줄 핵심 소개"
+                요약 문단
+
+                SKILLS
+                ● Languages & Frameworks: 기술 목록
+                ● Database: 기술 목록
+                ● DevOps & Tools: 기술 목록
+                ● AI Collaboration: 기술 목록
+
+                WORK EXPERIENCE
+                회사명 | 역할 | 기간
+                1. 프로젝트명 또는 업무명 | 기간
+                ● 성과 또는 담당 업무
+
+                PROJECTS
+                프로젝트명 또는 과정명 | 기간/상태
+                ● 성과 또는 담당 업무
+
+                EDUCATION
+                학교명 | 전공/상태
 
                 출력 JSON:
                 {
-                  "resumeContent": "마크다운으로 정리된 전체 이력서",
+                  "resumeContent": "위 양식으로 재정리된 전체 이력서",
                   "resumeFileName": "%s"
                 }
 

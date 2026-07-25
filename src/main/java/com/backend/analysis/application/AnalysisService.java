@@ -61,8 +61,10 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -1101,11 +1103,56 @@ public class AnalysisService {
         }
 
         String normalizedCrawledText = crawledText.trim();
-        if (normalizedGeminiRawText.contains(normalizedCrawledText)) {
+        if (containsRawTextContent(normalizedCrawledText, normalizedGeminiRawText)) {
             return normalizedGeminiRawText;
         }
 
         return normalizedCrawledText + "\n\n" + normalizedGeminiRawText;
+    }
+
+    private boolean containsRawTextContent(String sourceText, String targetText) {
+        if (targetText.contains(sourceText)) {
+            return true;
+        }
+
+        Set<String> sourceTokens = extractMeaningfulTokens(sourceText);
+        if (sourceTokens.isEmpty()) {
+            return false;
+        }
+
+        String normalizedTargetText = normalizeTextForComparison(targetText);
+        long matchedCount = sourceTokens.stream()
+                .filter(normalizedTargetText::contains)
+                .count();
+        int requiredMatchCount = Math.min(20, Math.max(6, (int) Math.ceil(sourceTokens.size() * 0.2)));
+
+        return matchedCount >= requiredMatchCount;
+    }
+
+    private Set<String> extractMeaningfulTokens(String text) {
+        Set<String> tokens = new LinkedHashSet<>();
+        String[] candidates = normalizeTextForComparison(text).split(" ");
+        for (String candidate : candidates) {
+            if (candidate.length() >= 2 && !isJobPostingBoilerplateToken(candidate)) {
+                tokens.add(candidate);
+            }
+        }
+
+        return tokens;
+    }
+
+    private String normalizeTextForComparison(String text) {
+        return text.toLowerCase()
+                .replaceAll("[^0-9a-z가-힣]+", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private boolean isJobPostingBoilerplateToken(String token) {
+        return Set.of(
+                "채용", "잡코리아", "회원가입", "로그인", "기업", "서비스", "상세요강", "접수기간",
+                "추천공고", "온라인", "채용관", "지도보기", "더보기", "확인", "보세요", "top"
+        ).contains(token);
     }
 
     private boolean hasText(String value) {

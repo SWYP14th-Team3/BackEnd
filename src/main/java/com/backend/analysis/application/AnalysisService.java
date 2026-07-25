@@ -678,8 +678,9 @@ public class AnalysisService {
         try {
             String crawledText = crawlJobPostingText(jobInputType, jobUrl, jobText);
             String platform = jobPostingCrawler.extractPlatform(jobUrl);
+            String imageText = extractJobPostingImageText(presentJobImages);
             GeminiJobDescriptionResponse jobDescriptionResponse = geminiAnalysisClient.summarizeJobDescription(
-                    buildJobDescriptionPrompt(jobUrl, crawledText, platform, presentJobImages),
+                    buildJobDescriptionPrompt(jobUrl, crawledText, imageText, platform, presentJobImages),
                     presentJobImages
             );
             validateJobDescriptionResponse(jobDescriptionResponse);
@@ -687,6 +688,18 @@ public class AnalysisService {
         } catch (CustomException e) {
             throw new CustomException(ErrorCode.JOB_POSTING_LOAD_FAILED);
         }
+    }
+
+    private String extractJobPostingImageText(List<MultipartFile> jobPostingImages) {
+        if (jobPostingImages == null || jobPostingImages.isEmpty()) {
+            return "";
+        }
+
+        String imageText = geminiAnalysisClient.extractJobPostingImageText(
+                jobPostingImages,
+                buildJobPostingImageOcrPrompt(jobPostingImages)
+        );
+        return defaultIfBlank(imageText, "").trim();
     }
 
     private void validateJobPostingInput(
@@ -1163,6 +1176,7 @@ public class AnalysisService {
     private String buildJobDescriptionPrompt(
             String jobPostingUrl,
             String jobPostingText,
+            String jobPostingImageText,
             String platform,
             List<MultipartFile> jobPostingImages
     ) {
@@ -1245,6 +1259,9 @@ public class AnalysisService {
 
                 입력 텍스트:
                 %s
+
+                이미지 OCR 텍스트:
+                %s
                 
                 첨부 이미지:
                 %s
@@ -1253,8 +1270,29 @@ public class AnalysisService {
                 platform,
                 defaultIfBlank(jobPostingUrl, "없음"),
                 jobPostingText,
+                defaultIfBlank(jobPostingImageText, "없음"),
                 buildJobPostingImagePromptText(jobPostingImages)
         );
+    }
+
+    private String buildJobPostingImageOcrPrompt(List<MultipartFile> jobPostingImages) {
+        return """
+                첨부된 채용공고 이미지들을 OCR로 읽어 텍스트로 옮겨라.
+                JSON 객체 하나만 반환하고 코드블록이나 설명은 쓰지 마.
+
+                작성 규칙:
+                - 이미지에 보이는 채용공고 텍스트를 가능한 한 빠짐없이 옮긴다.
+                - 업무내용, 자격요건, 우대사항, 포지션 소개, 조직 소개는 반드시 포함한다.
+                - 채용공고와 무관한 장식 요소는 제외한다.
+                - 읽을 수 없는 글자는 지어내지 말고 생략한다.
+                - 여러 이미지가 있으면 하나의 텍스트로 이어 붙인다.
+
+                첨부 이미지:
+                %s
+
+                출력 JSON:
+                { "image_text": "이미지에서 OCR로 추출한 채용공고 텍스트" }
+                """.formatted(buildJobPostingImagePromptText(jobPostingImages));
     }
 
     private String buildJobPostingImagePromptText(List<MultipartFile> jobPostingImages) {

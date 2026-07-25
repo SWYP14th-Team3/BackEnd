@@ -3,6 +3,7 @@ package com.backend.analysis.client;
 import com.backend.analysis.dto.GeminiAnalysisResponse;
 import com.backend.analysis.dto.GeminiCardContentResult;
 import com.backend.analysis.dto.GeminiJobDescriptionResponse;
+import com.backend.analysis.dto.GeminiJobPostingImageTextResponse;
 import com.backend.analysis.dto.GeminiPriorityScoreResult;
 import com.backend.analysis.dto.GeminiResumeResponse;
 import com.backend.global.exception.CustomException;
@@ -74,6 +75,27 @@ public class GeminiAnalysisClient {
 
         parts.add(textPart(prompt));
         return generate(parts, GeminiJobDescriptionResponse.class, jobDescriptionResponseSchema());
+    }
+
+    public String extractJobPostingImageText(List<MultipartFile> jobPostingImages, String prompt) {
+        if (jobPostingImages == null || jobPostingImages.isEmpty()) {
+            return "";
+        }
+
+        List<Map<String, Object>> parts = new ArrayList<>();
+        parts.add(textPart(prompt));
+        for (MultipartFile jobPostingImage : jobPostingImages) {
+            if (jobPostingImage != null && !jobPostingImage.isEmpty()) {
+                parts.add(inlineDataPart(jobPostingImage, resolveImageMimeType(jobPostingImage)));
+            }
+        }
+
+        GeminiJobPostingImageTextResponse response = generate(
+                parts,
+                GeminiJobPostingImageTextResponse.class,
+                jobPostingImageTextResponseSchema()
+        );
+        return response.imageText();
     }
 
     public GeminiAnalysisResponse analyze(String prompt) {
@@ -298,6 +320,17 @@ public class GeminiAnalysisClient {
                         "summary_text", Map.of("type", "STRING")
                 ),
                 "required", List.of("success", "raw_text", "summary_text")
+        );
+    }
+
+    private Map<String, Object> jobPostingImageTextResponseSchema() {
+        // 채용공고 이미지 OCR 결과를 텍스트로 반환
+        return Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "image_text", Map.of("type", "STRING")
+                ),
+                "required", List.of("image_text")
         );
     }
 

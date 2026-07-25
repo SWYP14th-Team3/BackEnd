@@ -435,6 +435,7 @@ class AnalysisServiceTest {
                 "buildJobDescriptionPrompt",
                 "https://example.com/job",
                 "모집분야: 정보보안 담당",
+                "업무내용: 정보보호 정책 수립 및 운영",
                 "잡코리아",
                 List.of(jobImage("posting-1.png"))
         );
@@ -452,6 +453,22 @@ class AnalysisServiceTest {
         assertThat(prompt).contains("같은 의미의 항목이 URL과 이미지에 모두 있으면 한 번만 남긴다");
         assertThat(prompt).contains("회원가입/로그인");
         assertThat(prompt).contains("inline_data로 함께 첨부");
+        assertThat(prompt).contains("posting-1.png");
+        assertThat(prompt).contains("이미지 OCR 텍스트");
+        assertThat(prompt).contains("업무내용: 정보보호 정책 수립 및 운영");
+    }
+
+    @Test
+    @DisplayName("채용공고 이미지 OCR 프롬프트는 직무 상세를 빠짐없이 추출하도록 요구한다")
+    void buildJobPostingImageOcrPromptRequestsJobDetailExtraction() {
+        String prompt = ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "buildJobPostingImageOcrPrompt",
+                List.of(jobImage("posting-1.png"))
+        );
+
+        assertThat(prompt).contains("첨부된 채용공고 이미지들을 OCR로 읽어 텍스트로 옮겨라");
+        assertThat(prompt).contains("업무내용, 자격요건, 우대사항, 포지션 소개, 조직 소개는 반드시 포함한다");
         assertThat(prompt).contains("posting-1.png");
     }
 

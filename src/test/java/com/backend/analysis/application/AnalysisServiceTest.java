@@ -428,47 +428,19 @@ class AnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("Gemini 공고 원문이 URL 내용을 이미 포함하면 중복으로 병합하지 않는다")
-    void mergeJobPostingRawTextDoesNotDuplicateCoveredUrlContent() {
-        String crawledText = """
-                ㈜문피아 채용 - [문피아] 정보보안 담당 | 잡코리아
-                모집분야 정보보안 담당 고용형태 정규직 경력 3년 이상 학력무관
-                근무지 서울 강남구 강남대로 308 랜드마크타워 12층
-                우대조건 컴퓨터활용능력 우수자 문서작성 우수자 유관업무 경력자 웹소설 이해도가 높은 분
-                접수기간 2026.07.14 2026.08.02
-                """;
-        String geminiRawText = """
-                ㈜문피아 채용 - [문피아] 정보보안 담당 | 잡코리아
-                모집분야: 정보보안 담당. 고용형태: 정규직. 경력: 3년 이상. 학력: 학력무관.
-                근무지: 서울 강남구 강남대로 308 랜드마크타워 12층.
-                우대조건: 컴퓨터활용능력 우수자, 문서작성 우수자, 유관업무 경력자, 웹소설 이해도가 높은 분.
-                접수기간: 2026.07.14 ~ 2026.08.02.
-                """;
-
-        String result = ReflectionTestUtils.invokeMethod(
+    @DisplayName("채용공고 프롬프트는 URL과 이미지 내용을 합쳐 중복 제거한 raw_text를 요구한다")
+    void buildJobDescriptionPromptRequestsDeduplicatedRawText() {
+        String prompt = ReflectionTestUtils.invokeMethod(
                 analysisService,
-                "mergeJobPostingRawText",
-                crawledText,
-                geminiRawText
+                "buildJobDescriptionPrompt",
+                "https://example.com/job",
+                "모집분야: 정보보안 담당",
+                "잡코리아"
         );
 
-        assertThat(result).isEqualTo(geminiRawText.trim());
-    }
-
-    @Test
-    @DisplayName("Gemini 공고 원문에 URL 핵심 내용이 부족하면 URL 원문을 보강한다")
-    void mergeJobPostingRawTextAppendsUrlContentWhenGeminiRawTextMissesIt() {
-        String crawledText = "모집분야 정보보안 담당 고용형태 정규직 경력 3년 이상 학력무관";
-        String geminiRawText = "이미지 OCR 내용: 사내 보안 정책 운영 및 취약점 점검";
-
-        String result = ReflectionTestUtils.invokeMethod(
-                analysisService,
-                "mergeJobPostingRawText",
-                crawledText,
-                geminiRawText
-        );
-
-        assertThat(result).isEqualTo(crawledText + "\n\n" + geminiRawText);
+        assertThat(prompt).contains("URL 크롤링 결과와 이미지 OCR 결과를 합쳐 중복 제거한 최종 공고 원문");
+        assertThat(prompt).contains("같은 의미의 항목이 URL과 이미지에 모두 있으면 한 번만 남긴다");
+        assertThat(prompt).contains("회원가입/로그인");
     }
 
     private byte[] createTextPdf(String text) throws IOException {

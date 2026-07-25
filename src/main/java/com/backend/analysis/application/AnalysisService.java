@@ -61,10 +61,8 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -186,10 +184,7 @@ public class AnalysisService {
 
         GeminiJobDescriptionResponse jobDescriptionResponse = jobPostingDraft.jobDescriptionResponse();
         String platform = jobPostingDraft.platform();
-        String jobPostingRawText = mergeJobPostingRawText(
-                jobPostingDraft.crawledText(),
-                jobDescriptionResponse.jdContent()
-        );
+        String jobPostingRawText = jobDescriptionResponse.jdContent().trim();
         JobDescription jobDescription = jobDescriptionRepository.save(
                 JobDescription.builder()
                         .user(user)
@@ -688,7 +683,7 @@ public class AnalysisService {
                     presentJobImages
             );
             validateJobDescriptionResponse(jobDescriptionResponse);
-            return new JobPostingDraft(platform, crawledText, jobDescriptionResponse);
+            return new JobPostingDraft(platform, jobDescriptionResponse);
         } catch (CustomException e) {
             throw new CustomException(ErrorCode.JOB_POSTING_LOAD_FAILED);
         }
@@ -1096,65 +1091,6 @@ public class AnalysisService {
         return value;
     }
 
-    private String mergeJobPostingRawText(String crawledText, String geminiRawText) {
-        String normalizedGeminiRawText = geminiRawText.trim();
-        if (!hasText(crawledText)) {
-            return normalizedGeminiRawText;
-        }
-
-        String normalizedCrawledText = crawledText.trim();
-        if (containsRawTextContent(normalizedCrawledText, normalizedGeminiRawText)) {
-            return normalizedGeminiRawText;
-        }
-
-        return normalizedCrawledText + "\n\n" + normalizedGeminiRawText;
-    }
-
-    private boolean containsRawTextContent(String sourceText, String targetText) {
-        if (targetText.contains(sourceText)) {
-            return true;
-        }
-
-        Set<String> sourceTokens = extractMeaningfulTokens(sourceText);
-        if (sourceTokens.isEmpty()) {
-            return false;
-        }
-
-        String normalizedTargetText = normalizeTextForComparison(targetText);
-        long matchedCount = sourceTokens.stream()
-                .filter(normalizedTargetText::contains)
-                .count();
-        int requiredMatchCount = Math.min(20, Math.max(6, (int) Math.ceil(sourceTokens.size() * 0.2)));
-
-        return matchedCount >= requiredMatchCount;
-    }
-
-    private Set<String> extractMeaningfulTokens(String text) {
-        Set<String> tokens = new LinkedHashSet<>();
-        String[] candidates = normalizeTextForComparison(text).split(" ");
-        for (String candidate : candidates) {
-            if (candidate.length() >= 2 && !isJobPostingBoilerplateToken(candidate)) {
-                tokens.add(candidate);
-            }
-        }
-
-        return tokens;
-    }
-
-    private String normalizeTextForComparison(String text) {
-        return text.toLowerCase()
-                .replaceAll("[^0-9a-z가-힣]+", " ")
-                .replaceAll("\\s+", " ")
-                .trim();
-    }
-
-    private boolean isJobPostingBoilerplateToken(String token) {
-        return Set.of(
-                "채용", "잡코리아", "회원가입", "로그인", "기업", "서비스", "상세요강", "접수기간",
-                "추천공고", "온라인", "채용관", "지도보기", "더보기", "확인", "보세요", "top"
-        ).contains(token);
-    }
-
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
     }
@@ -1234,14 +1170,23 @@ public class AnalysisService {
                 - URL: 페이지를 읽어 공고 본문 텍스트를 가져온다.
                 - 텍스트: 그대로 사용한다.
                 - 이미지: 이미지 속 공고 내용을 읽어(OCR) 텍스트로 옮긴다.
-                - URL/텍스트/이미지가 함께 제공되면 하나만 선택하지 말고 모든 입력에서 읽은 내용을 합쳐 raw_text에 포함한다.
+                - URL/텍스트/이미지가 함께 제공되면 모든 입력에서 읽은 내용을 비교한 뒤 하나의 공고 원문으로 통합한다.
 
                 # 규칙
-                - raw_text에는 공고 본문을 있는 그대로 담는다. 원문의 줄·항목 구조를 최대한 보존한다.
+                - raw_text에는 URL 크롤링 결과와 이미지 OCR 결과를 합쳐 중복 제거한 최종 공고 원문을 담는다.
+                - 같은 의미의 항목이 URL과 이미지에 모두 있으면 한 번만 남긴다.
+                - 더 구조화되어 있고 읽기 쉬운 표현이 있으면 그 표현을 우선 사용한다.
+                - 예: "모집분야 정보보안 담당"과 "모집분야: 정보보안 담당."은 같은 내용이므로 하나만 남긴다.
+                - 예: "경력 경력(3년이상)"과 "경력: 3년 이상."은 같은 내용이므로 하나만 남긴다.
+                - 이미지 OCR에만 있고 URL 텍스트에 없는 채용 핵심 정보는 raw_text에 추가한다.
+                - URL 텍스트에만 있고 이미지 OCR에 없는 채용 핵심 정보도 raw_text에 추가한다.
+                - 채용 핵심 정보가 아닌 사이트 공통 UI 문구는 제거한다.
+                - 제거 대상 예: 회원가입/로그인, 기업 서비스, JOB 찾기, 추천공고, 온라인 채용관, TOP, 지도보기, 잘못된 내용 문의, AI추천공고.
+                - 복리후생, 기업 일반 소개, 찜한 기업 수, 설립연차, 재택근무제 같은 정보는 채용 요건 분석에 필요할 때만 짧게 남기고 중복되면 제거한다.
+                - raw_text는 회사명, 포지션, 고용형태, 경력, 학력, 근무지, 근무시간, 자격요건, 우대조건, 접수기간 중심으로 정리한다.
                 - summary_text에는 원문을 바탕으로 회사명, 포지션, 주요 업무, 자격요건, 우대사항을 마크다운으로 정리한다.
                 - summary_text에 원문에 없는 내용을 지어내지 마라.
-                - URL 텍스트와 이미지 OCR 내용이 서로 보완 관계라면 둘 다 남긴다.
-                - 같은 문장이 중복될 때만 중복을 제거하고, 이미지에만 있는 요건/우대사항/기술스택은 절대 누락하지 마라.
+                - 이미지에만 있는 요건/우대사항/기술스택은 절대 누락하지 마라.
                 - 이미지의 경우 글자를 임의로 지어내지 마라. 안 보이면 안 보인다고 하라.
 
                 # 불러오기 실패 판정
@@ -1604,7 +1549,6 @@ public class AnalysisService {
 
     private record JobPostingDraft(
             String platform,
-            String crawledText,
             GeminiJobDescriptionResponse jobDescriptionResponse
     ) {
     }

@@ -440,6 +440,9 @@ class AnalysisServiceTest {
         );
 
         assertThat(prompt).contains("URL 크롤링 결과와 이미지 OCR 결과를 합쳐 중복 제거한 최종 공고 원문");
+        assertThat(prompt).contains("raw_text를 한 문장이나 콤마로 이어진 요약문으로 압축하지 마라");
+        assertThat(prompt).contains("## 모집요강");
+        assertThat(prompt).contains("## 지원자격");
         assertThat(prompt).contains("같은 의미의 항목이 URL과 이미지에 모두 있으면 한 번만 남긴다");
         assertThat(prompt).contains("회원가입/로그인");
         assertThat(prompt).contains("inline_data로 함께 첨부");

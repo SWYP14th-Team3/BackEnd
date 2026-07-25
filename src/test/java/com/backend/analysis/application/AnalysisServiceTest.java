@@ -162,6 +162,26 @@ class AnalysisServiceTest {
     }
 
     @Test
+    @DisplayName("URL 입력 방식은 채용공고 이미지를 함께 첨부할 수 있다")
+    void validateJobPostingInputAllowsJobImagesWithUrlType() {
+        MockMultipartFile image = new MockMultipartFile(
+                "jobImages",
+                "job.png",
+                "image/png",
+                "image".getBytes(StandardCharsets.UTF_8)
+        );
+
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.URL,
+                "https://company.com/jobs/123",
+                null,
+                List.of(image)
+        ));
+    }
+
+    @Test
     @DisplayName("TEXT 입력 방식은 jobText만 허용하고 길이 조건을 검증한다")
     void validateJobPostingInputAcceptsOnlyJobTextForTextType() {
         String validJobText = "a".repeat(100);
@@ -284,6 +304,55 @@ class AnalysisServiceTest {
     }
 
     @Test
+    @DisplayName("TEXT 입력 방식은 채용공고 이미지를 함께 첨부할 수 있다")
+    void validateJobPostingInputAllowsJobImagesWithTextType() {
+        MockMultipartFile image = new MockMultipartFile(
+                "jobImages",
+                "job.png",
+                "image/png",
+                "image".getBytes(StandardCharsets.UTF_8)
+        );
+
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.TEXT,
+                null,
+                "a".repeat(100),
+                List.of(image)
+        ));
+    }
+
+    @Test
+    @DisplayName("채용공고 이미지는 최대 10장까지 허용한다")
+    void validateJobPostingInputAllowsUpToTenJobImages() {
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.IMAGE,
+                null,
+                null,
+                createJobImages(10)
+        ));
+    }
+
+    @Test
+    @DisplayName("채용공고 이미지가 10장을 초과하면 거부한다")
+    void validateJobPostingInputRejectsMoreThanTenJobImages() {
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.IMAGE,
+                null,
+                null,
+                createJobImages(11)
+        ))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+    }
+
+    @Test
     @DisplayName("우선순위 점수는 effect 제곱을 effort로 나누고 소수점 둘째 자리로 반올림한다")
     void calculatePriorityScoreSquaresEffectAndDividesByEffort() {
         GeminiPriorityScoreResult priorityScore = new GeminiPriorityScoreResult(
@@ -393,6 +462,17 @@ class AnalysisServiceTest {
                 "image/png",
                 "image".getBytes(StandardCharsets.UTF_8)
         );
+    }
+
+    private List<MockMultipartFile> createJobImages(int count) {
+        return java.util.stream.IntStream.range(0, count)
+                .mapToObj(index -> new MockMultipartFile(
+                        "jobImages",
+                        "job-" + index + ".png",
+                        "image/png",
+                        ("image-" + index).getBytes(StandardCharsets.UTF_8)
+                ))
+                .toList();
     }
 
     private GeminiRequirementResult requirement(String reqId, String importance, String status) {

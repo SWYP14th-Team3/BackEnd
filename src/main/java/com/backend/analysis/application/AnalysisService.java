@@ -71,8 +71,8 @@ public class AnalysisService {
     private static final byte[] PDF_HEADER = "%PDF-".getBytes(StandardCharsets.US_ASCII);
     private static final int PDF_HEADER_SCAN_LIMIT = 1024;
     private static final long MAX_RESUME_PDF_SIZE = 10 * 1024 * 1024;
-    private static final int MAX_JOB_IMAGE_COUNT = 10;
     private static final int MAX_RETRY_COUNT = 5;
+    private static final int MAX_JOB_IMAGE_COUNT = 10;
 
     private final JobPostingCrawler jobPostingCrawler;
     private final GeminiAnalysisClient geminiAnalysisClient;
@@ -691,7 +691,7 @@ public class AnalysisService {
         validateJobImageFormats(presentImages);
 
         if (jobInputType == JobInputType.URL) {
-            if (!hasUrl || hasJobText || hasJobImage || !isHttpUrl(jobUrl)) {
+            if (!hasUrl || hasJobText || !isHttpUrl(jobUrl)) {
                 throw new CustomException(ErrorCode.INVALID_JOB_URL);
             }
 
@@ -699,7 +699,7 @@ public class AnalysisService {
         }
 
         if (jobInputType == JobInputType.TEXT) {
-            if (hasUrl || hasJobImage) {
+            if (hasUrl) {
                 throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
             }
             if (!hasJobText || jobText.trim().length() < 100) {
@@ -1114,11 +1114,14 @@ public class AnalysisService {
                 - URL: 페이지를 읽어 공고 본문 텍스트를 가져온다.
                 - 텍스트: 그대로 사용한다.
                 - 이미지: 이미지 속 공고 내용을 읽어(OCR) 텍스트로 옮긴다.
+                - URL/텍스트/이미지가 함께 제공되면 하나만 선택하지 말고 모든 입력에서 읽은 내용을 합쳐 raw_text에 포함한다.
 
                 # 규칙
                 - raw_text에는 공고 본문을 있는 그대로 담는다. 원문의 줄·항목 구조를 최대한 보존한다.
                 - summary_text에는 원문을 바탕으로 회사명, 포지션, 주요 업무, 자격요건, 우대사항을 마크다운으로 정리한다.
                 - summary_text에 원문에 없는 내용을 지어내지 마라.
+                - URL 텍스트와 이미지 OCR 내용이 서로 보완 관계라면 둘 다 남긴다.
+                - 같은 문장이 중복될 때만 중복을 제거하고, 이미지에만 있는 요건/우대사항/기술스택은 절대 누락하지 마라.
                 - 이미지의 경우 글자를 임의로 지어내지 마라. 안 보이면 안 보인다고 하라.
 
                 # 불러오기 실패 판정

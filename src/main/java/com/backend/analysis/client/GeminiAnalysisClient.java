@@ -61,7 +61,7 @@ public class GeminiAnalysisClient {
             String prompt,
             List<MultipartFile> jobPostingImages
     ) {
-        // 채용공고 이미지가 있으면 Gemini에 같이 전달
+        // 채용공고 이미지가 있으면 Gemini에 모두 같이 전달
         List<Map<String, Object>> parts = new ArrayList<>();
 
         if (jobPostingImages != null) {

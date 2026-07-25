@@ -183,7 +183,10 @@ public class AnalysisService {
 
         GeminiJobDescriptionResponse jobDescriptionResponse = jobPostingDraft.jobDescriptionResponse();
         String platform = jobPostingDraft.platform();
-        String jobPostingRawText = jobDescriptionResponse.jdContent().trim();
+        String jobPostingRawText = mergeJobPostingRawText(
+                jobPostingDraft.crawledText(),
+                jobDescriptionResponse.jdContent()
+        );
         JobDescription jobDescription = jobDescriptionRepository.save(
                 JobDescription.builder()
                         .user(user)
@@ -662,7 +665,7 @@ public class AnalysisService {
                     presentJobImages
             );
             validateJobDescriptionResponse(jobDescriptionResponse);
-            return new JobPostingDraft(platform, jobDescriptionResponse);
+            return new JobPostingDraft(platform, crawledText, jobDescriptionResponse);
         } catch (CustomException e) {
             throw new CustomException(ErrorCode.JOB_POSTING_LOAD_FAILED);
         }
@@ -1068,6 +1071,20 @@ public class AnalysisService {
         }
 
         return value;
+    }
+
+    private String mergeJobPostingRawText(String crawledText, String geminiRawText) {
+        String normalizedGeminiRawText = geminiRawText.trim();
+        if (!hasText(crawledText)) {
+            return normalizedGeminiRawText;
+        }
+
+        String normalizedCrawledText = crawledText.trim();
+        if (normalizedGeminiRawText.contains(normalizedCrawledText)) {
+            return normalizedGeminiRawText;
+        }
+
+        return normalizedCrawledText + "\n\n" + normalizedGeminiRawText;
     }
 
     private boolean hasText(String value) {
@@ -1484,6 +1501,7 @@ public class AnalysisService {
 
     private record JobPostingDraft(
             String platform,
+            String crawledText,
             GeminiJobDescriptionResponse jobDescriptionResponse
     ) {
     }

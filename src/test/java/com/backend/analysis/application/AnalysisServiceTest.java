@@ -349,7 +349,7 @@ class AnalysisServiceTest {
         ))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+                .isEqualTo(ErrorCode.TOO_MANY_JOB_IMAGES);
     }
 
     @Test

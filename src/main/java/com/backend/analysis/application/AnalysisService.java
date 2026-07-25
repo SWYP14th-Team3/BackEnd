@@ -679,7 +679,7 @@ public class AnalysisService {
             String crawledText = crawlJobPostingText(jobInputType, jobUrl, jobText);
             String platform = jobPostingCrawler.extractPlatform(jobUrl);
             GeminiJobDescriptionResponse jobDescriptionResponse = geminiAnalysisClient.summarizeJobDescription(
-                    buildJobDescriptionPrompt(jobUrl, crawledText, platform),
+                    buildJobDescriptionPrompt(jobUrl, crawledText, platform, presentJobImages),
                     presentJobImages
             );
             validateJobDescriptionResponse(jobDescriptionResponse);
@@ -1160,7 +1160,12 @@ public class AnalysisService {
                 """.formatted(buildResumeFileName(originalFilename), nowText());
     }
 
-    private String buildJobDescriptionPrompt(String jobPostingUrl, String jobPostingText, String platform) {
+    private String buildJobDescriptionPrompt(
+            String jobPostingUrl,
+            String jobPostingText,
+            String platform,
+            List<MultipartFile> jobPostingImages
+    ) {
         return """
                 # 역할
                 너는 채용 공고 입력 처리기다. 입력이 URL, 붙여넣은 텍스트,
@@ -1211,7 +1216,36 @@ public class AnalysisService {
 
                 입력 텍스트:
                 %s
-                """.formatted(nowText(), platform, defaultIfBlank(jobPostingUrl, "없음"), jobPostingText);
+                
+                첨부 이미지:
+                %s
+                """.formatted(
+                nowText(),
+                platform,
+                defaultIfBlank(jobPostingUrl, "없음"),
+                jobPostingText,
+                buildJobPostingImagePromptText(jobPostingImages)
+        );
+    }
+
+    private String buildJobPostingImagePromptText(List<MultipartFile> jobPostingImages) {
+        List<MultipartFile> presentImages = presentImages(jobPostingImages);
+        if (presentImages.isEmpty()) {
+            return "없음";
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("총 ").append(presentImages.size()).append("장. ");
+        builder.append("이 이미지들은 이 요청의 inline_data로 함께 첨부되어 있으므로 OCR로 읽어 URL/텍스트 입력과 함께 분석한다.");
+        for (int i = 0; i < presentImages.size(); i++) {
+            MultipartFile image = presentImages.get(i);
+            builder.append('\n')
+                    .append("- image_").append(i + 1)
+                    .append(": ")
+                    .append(defaultIfBlank(image.getOriginalFilename(), "파일명 없음"));
+        }
+
+        return builder.toString();
     }
 
     private String buildAnalysisPrompt(String resumeContent, String jdContent) {

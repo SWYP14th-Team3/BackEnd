@@ -10,6 +10,9 @@ import com.backend.analysis.domain.RequirementCategory;
 import com.backend.analysis.domain.RequirementEvaluation;
 import com.backend.analysis.domain.RequirementType;
 import com.backend.analysis.domain.UserResume;
+import com.backend.analysis.dto.GeminiAnalysisResponse;
+import com.backend.analysis.dto.GeminiCardContentResult;
+import com.backend.analysis.dto.GeminiRequirementResult;
 import com.backend.analysis.dto.response.ReanalysisResponse;
 import com.backend.analysis.infrastructure.AnalysisResultRepository;
 import com.backend.analysis.infrastructure.JobRequirementRepository;
@@ -21,10 +24,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -85,6 +90,72 @@ class AnalysisReanalysisServiceTest {
 
         verifyNoInteractions(geminiAnalysisClient);
         verify(analysisResultRepository, never()).flush();
+    }
+
+    @Test
+    @DisplayName("마지막 분석 이후 자동저장된 이력서는 저장된 내용과 요청 내용이 같아도 재분석한다")
+    void reanalyzeRunsWhenResumeWasSavedAfterLastAnalysis() {
+        AnalysisResult analysisResult = createAnalysisResult();
+        JobRequirement requirement = createRequirement(analysisResult);
+        RequirementEvaluation evaluation = createEvaluation(requirement);
+        LocalDateTime analyzedAt = LocalDateTime.of(2026, 7, 26, 18, 0);
+        LocalDateTime autosavedAt = LocalDateTime.of(2026, 7, 26, 18, 5);
+        ReflectionTestUtils.setField(analysisResult, "createdAt", analyzedAt);
+        analysisResult.getUserResume().updateResumeContent("수정된 이력서 텍스트", autosavedAt);
+
+        when(analysisResultRepository.findByIdAndDeletedAtIsNull(1L))
+                .thenReturn(Optional.of(analysisResult));
+        when(jobRequirementRepository.findAllByAnalysisResultOrderByInputOrderAscIdAsc(analysisResult))
+                .thenReturn(List.of(requirement));
+        when(requirementEvaluationRepository.findByJobRequirement(requirement))
+                .thenReturn(Optional.of(evaluation));
+        when(geminiAnalysisClient.reanalyze(anyString()))
+                .thenReturn(new GeminiAnalysisResponse(
+                        true,
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of(new GeminiRequirementResult(
+                                "r2",
+                                "Spring Boot 개발 경험",
+                                "필수",
+                                "Spring Boot 기반 백엔드 개발 경험 보유자",
+                                "수정된 이력서 텍스트",
+                                "수정된 이력서에서 Spring Boot 경험이 확인됩니다.",
+                                null,
+                                null,
+                                null,
+                                "green",
+                                null,
+                                null,
+                                null,
+                                null
+                        ))
+                ));
+        when(geminiAnalysisClient.createCardContents(anyString()))
+                .thenReturn(List.of(new GeminiCardContentResult(
+                        "r2",
+                        "green",
+                        "Spring Boot 경험이 확인됐어요",
+                        "Spring Boot 경험이 명확히 확인됩니다.",
+                        null
+                )));
+
+        ReanalysisResponse response = analysisService.reanalyze(
+                1L,
+                1L,
+                "수정된 이력서 텍스트"
+        );
+
+        assertThat(response.getRetryCount()).isEqualTo(1);
+        assertThat(response.getRedCount()).isZero();
+        assertThat(response.getYellowCount()).isZero();
+        assertThat(response.getGreenCount()).isEqualTo(1);
+        assertThat(response.getResumeCurrentText()).isEqualTo("수정된 이력서 텍스트");
+
+        verify(geminiAnalysisClient).reanalyze(anyString());
+        verify(analysisResultRepository).flush();
     }
 
     private AnalysisResult createAnalysisResult() {

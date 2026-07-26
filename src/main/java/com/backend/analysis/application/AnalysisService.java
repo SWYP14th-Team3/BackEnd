@@ -274,7 +274,7 @@ public class AnalysisService {
         }
 
         String trimmedResumeText = resumeCurrentText.trim();
-        if (isSameResumeContent(analysisResult.getUserResume().getResumeContent(), trimmedResumeText)) {
+        if (canSkipReanalysis(analysisResult, trimmedResumeText)) {
             return ReanalysisResponse.unchanged(
                     analysisResult,
                     getRequirementResponses(analysisResult)
@@ -429,6 +429,24 @@ public class AnalysisService {
     private boolean isSameResumeContent(String savedResumeContent, String requestedResumeContent) {
         return normalizeResumeContentForComparison(savedResumeContent)
                 .equals(normalizeResumeContentForComparison(requestedResumeContent));
+    }
+
+    private boolean canSkipReanalysis(AnalysisResult analysisResult, String requestedResumeContent) {
+        return isSameResumeContent(analysisResult.getUserResume().getResumeContent(), requestedResumeContent)
+                && !isResumeSavedAfterLastAnalysis(analysisResult);
+    }
+
+    private boolean isResumeSavedAfterLastAnalysis(AnalysisResult analysisResult) {
+        LocalDateTime lastAnalysisAt = analysisResult.getLastReanalyzedAt() != null
+                ? analysisResult.getLastReanalyzedAt()
+                : analysisResult.getCreatedAt();
+        LocalDateTime resumeSavedAt = analysisResult.getUserResume().getLastSavedAt() != null
+                ? analysisResult.getUserResume().getLastSavedAt()
+                : analysisResult.getUserResume().getUpdatedAt();
+
+        return lastAnalysisAt != null
+                && resumeSavedAt != null
+                && resumeSavedAt.isAfter(lastAnalysisAt);
     }
 
     private String normalizeResumeContentForComparison(String resumeContent) {

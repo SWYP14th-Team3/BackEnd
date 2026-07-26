@@ -66,4 +66,31 @@ public class ReanalysisResponse {
                 .requirements(requirements)
                 .build();
     }
+
+    public static ReanalysisResponse unchanged(
+            AnalysisResult analysisResult,
+            List<JobRequirementResponse> requirements
+    ) {
+        int retryCount = analysisResult.getRetryCount();
+
+        return ReanalysisResponse.builder()
+                .analysisResultId(analysisResult.getId())
+                .previousOverallLevel(analysisResult.getOverallLevel())
+                .previousRedCount(analysisResult.getRedCount())
+                .previousYellowCount(analysisResult.getYellowCount())
+                .previousGreenCount(analysisResult.getGreenCount())
+                .overallLevel(analysisResult.getOverallLevel())
+                .redCount(analysisResult.getRedCount())
+                .yellowCount(analysisResult.getYellowCount())
+                .greenCount(analysisResult.getGreenCount())
+                .lastReanalyzedAt(analysisResult.getLastReanalyzedAt())
+                .retryCount(retryCount)
+                .remainingRetryCount(Math.max(0, MAX_RETRY_COUNT - retryCount))
+                .resumeCurrentText(analysisResult.getUserResume().getResumeContent())
+                .resumeLastSavedAt(analysisResult.getUserResume().getLastSavedAt())
+                .finalSavedAt(analysisResult.getFinalSavedAt())
+                .updatedAt(analysisResult.getUpdatedAt())
+                .requirements(requirements)
+                .build();
+    }
 }

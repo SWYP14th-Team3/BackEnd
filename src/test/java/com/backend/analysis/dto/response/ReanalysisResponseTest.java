@@ -78,4 +78,56 @@ class ReanalysisResponseTest {
         assertThat(response.getResumeLastSavedAt()).isEqualTo(reanalyzedAt);
         assertThat(response.getFinalSavedAt()).isNull();
     }
+
+    @Test
+    @DisplayName("변경 없는 재분석 응답은 직전 결과와 현재 결과를 동일하게 담는다")
+    void unchangedResponseContainsSamePreviousAndCurrentAnalysisResult() {
+        User user = User.createSocialUser(
+                null,
+                Provider.KAKAO,
+                "kakao-provider-id",
+                "카카오사용자"
+        );
+
+        UserResume userResume = UserResume.builder()
+                .user(user)
+                .resumeContent("기존 이력서")
+                .resumeFileName("resume.pdf")
+                .resumeFileSize(100L)
+                .build();
+
+        JobDescription jobDescription = JobDescription.builder()
+                .user(user)
+                .companyName("카카오")
+                .positionTitle("백엔드 개발자")
+                .jobPlatform("company")
+                .jdOriginalText("공고 원문")
+                .jdSummaryText("공고 요약")
+                .build();
+
+        AnalysisResult analysisResult = AnalysisResult.builder()
+                .user(user)
+                .userResume(userResume)
+                .jobDescription(jobDescription)
+                .overallLevel(OverallLevel.MEDIUM)
+                .redCount(1)
+                .yellowCount(2)
+                .greenCount(3)
+                .build();
+        ReflectionTestUtils.setField(analysisResult, "id", 1L);
+
+        ReanalysisResponse response = ReanalysisResponse.unchanged(analysisResult, List.of());
+
+        assertThat(response.getAnalysisResultId()).isEqualTo(1L);
+        assertThat(response.getPreviousOverallLevel()).isEqualTo(OverallLevel.MEDIUM);
+        assertThat(response.getPreviousRedCount()).isEqualTo(1);
+        assertThat(response.getPreviousYellowCount()).isEqualTo(2);
+        assertThat(response.getPreviousGreenCount()).isEqualTo(3);
+        assertThat(response.getOverallLevel()).isEqualTo(OverallLevel.MEDIUM);
+        assertThat(response.getRedCount()).isEqualTo(1);
+        assertThat(response.getYellowCount()).isEqualTo(2);
+        assertThat(response.getGreenCount()).isEqualTo(3);
+        assertThat(response.getRetryCount()).isZero();
+        assertThat(response.getRemainingRetryCount()).isEqualTo(5);
+    }
 }

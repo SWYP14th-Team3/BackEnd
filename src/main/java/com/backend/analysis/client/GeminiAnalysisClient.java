@@ -159,6 +159,7 @@ public class GeminiAnalysisClient {
             Map<String, Object> generationConfig = new LinkedHashMap<>();
             generationConfig.put("response_mime_type", "application/json");
             generationConfig.put("max_output_tokens", 8192);
+            generationConfig.put("temperature", 0);
 
             if (responseSchema != null) {
                 generationConfig.put("response_schema", responseSchema);

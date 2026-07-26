@@ -267,8 +267,6 @@ public class AnalysisService {
         }
 
         AnalysisResult analysisResult = findOwnedAnalysisResult(userId, analysisResultId);
-        validateRetryCount(analysisResult);
-
         List<JobRequirement> existingRequirements =
                 jobRequirementRepository.findAllByAnalysisResultOrderByInputOrderAscIdAsc(analysisResult);
         if (existingRequirements.isEmpty()) {
@@ -276,6 +274,15 @@ public class AnalysisService {
         }
 
         String trimmedResumeText = resumeCurrentText.trim();
+        if (isSameResumeContent(analysisResult.getUserResume().getResumeContent(), trimmedResumeText)) {
+            return ReanalysisResponse.unchanged(
+                    analysisResult,
+                    getRequirementResponses(analysisResult)
+            );
+        }
+
+        validateRetryCount(analysisResult);
+
         GeminiAnalysisResponse reanalysisResponse;
         Map<String, GeminiRequirementResult> resultByReqId;
         Map<String, GeminiPriorityScoreResult> priorityScoreByReqId;
@@ -417,6 +424,22 @@ public class AnalysisService {
         if (analysisResult.getRetryCount() >= MAX_RETRY_COUNT) {
             throw new CustomException(ErrorCode.REANALYSIS_RETRY_LIMIT_EXCEEDED);
         }
+    }
+
+    private boolean isSameResumeContent(String savedResumeContent, String requestedResumeContent) {
+        return normalizeResumeContentForComparison(savedResumeContent)
+                .equals(normalizeResumeContentForComparison(requestedResumeContent));
+    }
+
+    private String normalizeResumeContentForComparison(String resumeContent) {
+        if (resumeContent == null) {
+            return "";
+        }
+
+        return resumeContent
+                .replace("\r\n", "\n")
+                .replace('\r', '\n')
+                .trim();
     }
 
     private List<JobRequirementResponse> saveRequirementsAndEvaluations(

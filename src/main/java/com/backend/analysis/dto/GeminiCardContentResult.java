@@ -5,6 +5,10 @@ public record GeminiCardContentResult(
         String req_id,
         String status,
         String title,
-        String feedback
+        String feedback,
+        String revision_suggestion
 ) {
+    public String revisionSuggestion() {
+        return revision_suggestion;
+    }
 }

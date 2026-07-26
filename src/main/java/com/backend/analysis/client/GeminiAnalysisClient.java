@@ -400,7 +400,7 @@ public class GeminiAnalysisClient {
     }
 
     private Map<String, Object> cardContentResponseSchema() {
-        // LLM4 카드 문구 생성은 모든 요건의 title/feedback 배열을 반환
+        // LLM4 카드 문구 생성은 모든 요건의 title/feedback/revision_suggestion 배열을 반환
         return Map.of(
                 "type", "ARRAY",
                 "items", Map.of(
@@ -412,9 +412,10 @@ public class GeminiAnalysisClient {
                                         "enum", List.of("green", "yellow", "red")
                                 ),
                                 "title", Map.of("type", "STRING"),
-                                "feedback", Map.of("type", "STRING")
+                                "feedback", Map.of("type", "STRING"),
+                                "revision_suggestion", nullableStringSchema()
                         ),
-                        "required", List.of("req_id", "status", "title", "feedback")
+                        "required", List.of("req_id", "status", "title", "feedback", "revision_suggestion")
                 )
         );
     }

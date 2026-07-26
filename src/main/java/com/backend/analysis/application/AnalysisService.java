@@ -319,7 +319,12 @@ public class AnalysisService {
                     defaultIfBlank(item.resumeEvidence(), "없음"),
                     item.judgeReason(),
                     defaultIfBlank(cardContent != null ? cardContent.feedback() : null, item.feedback()),
-                    normalizeEvaluationText(matchStatus, item.revisionSuggestion()),
+                    normalizeEvaluationText(
+                            matchStatus,
+                            cardContent != null
+                                    ? defaultIfBlank(cardContent.revisionSuggestion(), item.revisionSuggestion())
+                                    : item.revisionSuggestion()
+                    ),
                     priorityScore != null ? normalizeScore(priorityScore.effect_score()) : null,
                     priorityScore != null ? normalizeScore(priorityScore.effort_score()) : null,
                     calculatePriorityScore(priorityScore)
@@ -448,7 +453,12 @@ public class AnalysisService {
                             .resumeEvidence(normalizeEvaluationText(matchStatus, item.resumeEvidence()))
                             .judgeReason(item.judgeReason())
                             .feedback(defaultIfBlank(cardContent != null ? cardContent.feedback() : null, item.feedback()))
-                            .revisionSuggestion(normalizeEvaluationText(matchStatus, item.revisionSuggestion()))
+                            .revisionSuggestion(normalizeEvaluationText(
+                                    matchStatus,
+                                    cardContent != null
+                                            ? defaultIfBlank(cardContent.revisionSuggestion(), item.revisionSuggestion())
+                                            : item.revisionSuggestion()
+                            ))
                             .effectScore(priorityScore != null ? normalizeScore(priorityScore.effect_score()) : null)
                             .effortScore(priorityScore != null ? normalizeScore(priorityScore.effort_score()) : null)
                             .priorityScore(calculatePriorityScore(priorityScore))
@@ -1566,7 +1576,7 @@ public class AnalysisService {
         return """
                 # 역할
                 너는 IT 이력서 첨삭 코치다. 각 요건에 대해 카드에 표시할
-                제목(title)과 피드백(feedback)을 작성한다.
+                제목(title), 상세 피드백(feedback), 한끗 피드백(revision_suggestion)을 작성한다.
 
                 # 입력
                 - 요건 목록 (req_id, content, importance, status[green/yellow/red],
@@ -1581,14 +1591,24 @@ public class AnalysisService {
                 - yellow → 피드백 한 줄 요약
 
                 # feedback 작성 규칙
-                - 유저가 읽고 '바로 무엇을 할지' 알 수 있게 쓴다.
+                - 상세 피드백 영역에 표시된다.
+                - 현재 이력서가 왜 충분한지/부족한지 설명한다.
                 - LLM2의 판정·근거와 어긋나지 않게 쓴다.
                 - 이력서에 실제 있는 내용만 근거로 하고, 없는 경험을 지어내지 마라.
-                - green: 이미 잘 갖춰진 항목. 어떻게 더 강조·부각하면 좋을지 보강 제안.
-                - yellow: 기존 문장을 어떻게 고칠지. 필요하면 피드백 문장 안에 수정 예시 포함.
-                - red: 무엇을 추가하거나 어떤 경험을 쌓을지.
-                - red/yellow에서 effort_score가 낮으면 당장 할 표현 수정 위주, 높으면 현실적 확보 방향.
-                - 한 항목당 2~3문장. 권유조로 "~하면 좋아요"처럼 쓴다.
+                - green: 이미 확인된 근거와 강점을 설명한다.
+                - yellow: 어떤 근거는 있으나 무엇이 부족한지 설명한다.
+                - red: 이력서에서 해당 근거가 확인되지 않는다고 설명한다.
+                - 한 항목당 1~2문장으로 쓴다.
+
+                # revision_suggestion 작성 규칙
+                - 화면의 "한끗 피드백" 영역에 표시된다.
+                - 유저가 바로 이력서에 반영할 수 있는 구체적인 수정 제안으로 쓴다.
+                - yellow/red는 반드시 작성한다.
+                - green은 수정 제안이 필수는 아니므로 null로 둔다.
+                - yellow는 기존 경험을 어떻게 구체화할지 제안한다.
+                - red는 추가할 키워드, 프로젝트 경험, 학습/구현 방향을 제안한다.
+                - red/yellow에서 effort_score가 낮으면 표현 수정 위주, 높으면 현실적 경험 확보 방향으로 쓴다.
+                - 한 항목당 1문장. 권유조로 "~해보세요"처럼 쓴다.
 
                 # 중요
                 - 카드의 근거 칸에는 LLM2의 judge_reason이 그대로 들어간다.
@@ -1598,11 +1618,12 @@ public class AnalysisService {
                 JSON 배열 하나만 반환해. 코드블록과 JSON 밖 설명은 쓰지 마.
                 [
                   {
-                    "req_id": "r1",
-                    "status": "green",
-                    "title": "REST API 설계 및 개발 경험",
-                    "feedback": "이미 잘 갖춰진 항목이에요. API 개수뿐 아니라 응답속도 개선 같은 성과 수치를 함께 적으면 이 강점이 더 부각돼요."
-                  }
+	                    "req_id": "r1",
+	                    "status": "yellow",
+	                    "title": "Spring Boot 경험을 더 구체화하세요",
+	                    "feedback": "Spring Boot 프로젝트 경험은 확인되지만, 공고가 요구하는 실무 적용 근거가 아직 부족합니다.",
+	                    "revision_suggestion": "기술 스택에 Java, Spring Boot를 추가하고 프로젝트 섹션에서 Spring Boot 기반 REST API 개발 경험을 구체적으로 작성해보세요."
+	                  }
                 ]
 
                 [요건 목록]

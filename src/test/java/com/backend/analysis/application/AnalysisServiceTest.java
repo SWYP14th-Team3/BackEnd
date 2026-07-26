@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -425,6 +426,25 @@ class AnalysisServiceTest {
 
         assertThat(prompt).contains("렌더링 30% 개선");
         assertThat(prompt).contains("React 기반 대시보드 렌더링 30% 개선");
+    }
+
+    @Test
+    @DisplayName("카드 문구 프롬프트는 상세 피드백과 한끗 피드백을 분리해 생성하도록 요청한다")
+    void buildCardContentPromptRequestsRevisionSuggestion() {
+        String prompt = ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "buildCardContentPrompt",
+                List.of(requirement("r1", "필수", "yellow")),
+                Map.of("r1", new GeminiPriorityScoreResult("r1", 4, 2, "테스트")),
+                "Spring Boot 개발 경험 보유자",
+                "Spring Boot 프로젝트 경험"
+        );
+
+        assertThat(prompt).contains("상세 피드백(feedback)");
+        assertThat(prompt).contains("한끗 피드백(revision_suggestion)");
+        assertThat(prompt).contains("\"revision_suggestion\"");
+        assertThat(prompt).contains("yellow/red는 반드시 작성한다");
+        assertThat(prompt).contains("green은 수정 제안이 필수는 아니므로 null로 둔다");
     }
 
     @Test

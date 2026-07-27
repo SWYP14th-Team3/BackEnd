@@ -282,6 +282,8 @@ public class AnalysisService {
         }
 
         validateRetryCount(analysisResult);
+        Map<String, RequirementEvaluation> previousEvaluationByReqId =
+                findPreviousEvaluationByReqId(existingRequirements);
 
         GeminiAnalysisResponse reanalysisResponse;
         Map<String, GeminiRequirementResult> resultByReqId;
@@ -289,25 +291,30 @@ public class AnalysisService {
         Map<String, GeminiCardContentResult> cardContentByReqId;
         try {
             reanalysisResponse = geminiAnalysisClient.reanalyze(
-                    buildReanalysisPrompt(existingRequirements, trimmedResumeText)
+                    buildReanalysisPrompt(existingRequirements, previousEvaluationByReqId, trimmedResumeText)
             );
             validateReanalysisResponse(reanalysisResponse, existingRequirements);
             List<GeminiRequirementResult> reanalysisRequirements = withStoredRequirementMetadata(
                     reanalysisResponse.requirements(),
                     existingRequirements
             );
+            List<GeminiRequirementResult> stableReanalysisRequirements = preventUnjustifiedDowngrades(
+                    reanalysisRequirements,
+                    previousEvaluationByReqId,
+                    trimmedResumeText
+            );
 
             resultByReqId = new HashMap<>();
-            for (GeminiRequirementResult item : reanalysisRequirements) {
+            for (GeminiRequirementResult item : stableReanalysisRequirements) {
                 resultByReqId.put(item.reqId(), item);
             }
             priorityScoreByReqId = scoreRedYellowRequirements(
-                    reanalysisRequirements,
+                    stableReanalysisRequirements,
                     analysisResult.getJobDescription().getJdContent(),
                     trimmedResumeText
             );
             cardContentByReqId = createCardContents(
-                    reanalysisRequirements,
+                    stableReanalysisRequirements,
                     priorityScoreByReqId,
                     analysisResult.getJobDescription().getJdContent(),
                     trimmedResumeText
@@ -321,8 +328,7 @@ public class AnalysisService {
             MatchStatus matchStatus = parseMatchStatus(item.matchStatus());
             GeminiPriorityScoreResult priorityScore = priorityScoreByReqId.get(item.reqId());
             GeminiCardContentResult cardContent = cardContentByReqId.get(item.reqId());
-            RequirementEvaluation evaluation = requirementEvaluationRepository.findByJobRequirement(requirement)
-                    .orElseThrow(() -> new CustomException(ErrorCode.ANALYSIS_RESULT_NOT_FOUND));
+            RequirementEvaluation evaluation = previousEvaluationByReqId.get(reanalysisReqId(requirement));
 
             evaluation.updateReanalysis(
                     matchStatus,
@@ -898,6 +904,17 @@ public class AnalysisService {
         }
     }
 
+    private Map<String, RequirementEvaluation> findPreviousEvaluationByReqId(List<JobRequirement> existingRequirements) {
+        Map<String, RequirementEvaluation> evaluationByReqId = new HashMap<>();
+        for (JobRequirement requirement : existingRequirements) {
+            RequirementEvaluation evaluation = requirementEvaluationRepository.findByJobRequirement(requirement)
+                    .orElseThrow(() -> new CustomException(ErrorCode.ANALYSIS_RESULT_NOT_FOUND));
+            evaluationByReqId.put(reanalysisReqId(requirement), evaluation);
+        }
+
+        return evaluationByReqId;
+    }
+
     private List<GeminiRequirementResult> withStoredRequirementMetadata(
             List<GeminiRequirementResult> reanalysisRequirements,
             List<JobRequirement> existingRequirements
@@ -929,6 +946,84 @@ public class AnalysisService {
         }
 
         return enrichedRequirements;
+    }
+
+    private List<GeminiRequirementResult> preventUnjustifiedDowngrades(
+            List<GeminiRequirementResult> reanalysisRequirements,
+            Map<String, RequirementEvaluation> previousEvaluationByReqId,
+            String resumeCurrentText
+    ) {
+        List<GeminiRequirementResult> stableRequirements = new ArrayList<>();
+        for (GeminiRequirementResult requirement : reanalysisRequirements) {
+            RequirementEvaluation previousEvaluation = previousEvaluationByReqId.get(requirement.reqId());
+            MatchStatus previousStatus = previousEvaluation.getMatchStatus();
+            MatchStatus nextStatus = parseMatchStatus(requirement.matchStatus());
+
+            if (isDowngrade(previousStatus, nextStatus)
+                    && isPreviousEvidenceStillPresent(previousEvaluation.getResumeEvidence(), resumeCurrentText)) {
+                stableRequirements.add(withPreviousEvaluation(requirement, previousEvaluation));
+                continue;
+            }
+
+            stableRequirements.add(requirement);
+        }
+
+        return stableRequirements;
+    }
+
+    private GeminiRequirementResult withPreviousEvaluation(
+            GeminiRequirementResult requirement,
+            RequirementEvaluation previousEvaluation
+    ) {
+        return new GeminiRequirementResult(
+                requirement.reqId(),
+                requirement.title(),
+                requirement.category(),
+                requirement.sourceText(),
+                previousEvaluation.getResumeEvidence(),
+                previousEvaluation.getJudgeReason(),
+                requirement.id(),
+                requirement.text(),
+                requirement.type(),
+                toGeminiStatus(previousEvaluation.getMatchStatus()),
+                requirement.flag(),
+                requirement.evidence(),
+                previousEvaluation.getFeedback(),
+                previousEvaluation.getRevisionSuggestion()
+        );
+    }
+
+    private boolean isDowngrade(MatchStatus previousStatus, MatchStatus nextStatus) {
+        return matchStatusRank(nextStatus) < matchStatusRank(previousStatus);
+    }
+
+    private int matchStatusRank(MatchStatus status) {
+        return switch (status) {
+            case MISSING -> 0;
+            case NEEDS_IMPROVEMENT -> 1;
+            case CONFIRMED -> 2;
+        };
+    }
+
+    private boolean isPreviousEvidenceStillPresent(String previousResumeEvidence, String resumeCurrentText) {
+        if (!hasText(previousResumeEvidence) || "없음".equals(previousResumeEvidence.trim())) {
+            return false;
+        }
+
+        return normalizeTextForEvidenceComparison(resumeCurrentText)
+                .contains(normalizeTextForEvidenceComparison(previousResumeEvidence));
+    }
+
+    private String normalizeTextForEvidenceComparison(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        return value
+                .replace("\r\n", "\n")
+                .replace('\r', '\n')
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 
     private void validateJobDescriptionResponse(GeminiJobDescriptionResponse jobDescriptionResponse) {
@@ -1136,6 +1231,14 @@ public class AnalysisService {
         }
 
         return MatchStatus.NEEDS_IMPROVEMENT;
+    }
+
+    private String toGeminiStatus(MatchStatus status) {
+        return switch (status) {
+            case CONFIRMED -> "green";
+            case NEEDS_IMPROVEMENT -> "yellow";
+            case MISSING -> "red";
+        };
     }
 
     private Integer normalizeScore(Integer score) {
@@ -1444,7 +1547,11 @@ public class AnalysisService {
                 """.formatted(jdContent, resumeContent);
     }
 
-    private String buildReanalysisPrompt(List<JobRequirement> existingRequirements, String resumeCurrentText) {
+    private String buildReanalysisPrompt(
+            List<JobRequirement> existingRequirements,
+            Map<String, RequirementEvaluation> previousEvaluationByReqId,
+            String resumeCurrentText
+    ) {
         return """
                 # 역할
                 너는 이력서와 채용공고를 대조해 각 요건의 충족도를 판정하는 엔진이다.
@@ -1456,7 +1563,10 @@ public class AnalysisService {
                   - content: 요건 문구
                   - importance: 필수 / 우대
                   - jd_evidence: 이 요건이 나온 공고 원문 문장
-                  ※ 위 네 값은 읽기 전용 참고 자료다. 판정의 기준으로만 쓰고,
+                  - previous_status: 직전 분석의 충족도
+                  - previous_resume_evidence: 직전 분석에서 찾은 이력서 근거
+                  - previous_judge_reason: 직전 분석의 판정 이유
+                  ※ content / importance / jd_evidence는 읽기 전용 참고 자료다. 판정의 기준으로만 쓰고,
                     출력에 다시 담지 마라.
                 - 수정된 이력서 원문 텍스트
 
@@ -1481,6 +1591,13 @@ public class AnalysisService {
 
                 "구체적"의 정의 — 아래 중 2개 이상 명시 시 green:
                 역할(설계/구현/운영/최적화), 기술(도구), 성과(정량 결과·산출물)
+
+                ## 재분석 안정성 규칙
+                - 기본 원칙은 previous_status를 유지하는 것이다.
+                - 수정된 이력서에서 해당 요건의 근거가 명확히 추가·삭제·구체화된 경우에만 status를 바꿔라.
+                - previous_resume_evidence가 수정된 이력서에도 그대로 존재하면 status를 낮추지 마라.
+                - 사용자가 다른 문장만 수정했는데 해당 요건의 근거가 그대로라면 이전 status를 유지하라.
+                - green → yellow/red, yellow → red처럼 낮추는 판정은 이전 근거가 수정된 이력서에서 사라졌을 때만 허용한다.
 
                 ## 판정 규칙
                 1) 동등 기술: 이 요건의 jd_evidence(공고 원문 문장)를 보고 판단하라.
@@ -1529,17 +1646,30 @@ public class AnalysisService {
 
                 [수정된 이력서 원문]
                 %s
-                """.formatted(buildReanalysisRequirementText(existingRequirements), resumeCurrentText);
+                """.formatted(
+                buildReanalysisRequirementText(existingRequirements, previousEvaluationByReqId),
+                resumeCurrentText
+        );
     }
 
-    private String buildReanalysisRequirementText(List<JobRequirement> existingRequirements) {
+    private String buildReanalysisRequirementText(
+            List<JobRequirement> existingRequirements,
+            Map<String, RequirementEvaluation> previousEvaluationByReqId
+    ) {
         StringBuilder builder = new StringBuilder();
 
         for (JobRequirement requirement : existingRequirements) {
+            String reqId = reanalysisReqId(requirement);
+            RequirementEvaluation previousEvaluation = previousEvaluationByReqId.get(reqId);
             builder.append("- req_id: ").append(reanalysisReqId(requirement)).append('\n')
                     .append("  content: ").append(requirement.getTitle()).append('\n')
                     .append("  importance: ").append(requirementImportance(requirement)).append('\n')
-                    .append("  jd_evidence: ").append(defaultIfBlank(requirement.getJdEvidence(), requirement.getTitle())).append('\n');
+                    .append("  jd_evidence: ").append(defaultIfBlank(requirement.getJdEvidence(), requirement.getTitle())).append('\n')
+                    .append("  previous_status: ").append(toGeminiStatus(previousEvaluation.getMatchStatus())).append('\n')
+                    .append("  previous_resume_evidence: ")
+                    .append(defaultIfBlank(previousEvaluation.getResumeEvidence(), "없음")).append('\n')
+                    .append("  previous_judge_reason: ")
+                    .append(defaultIfBlank(previousEvaluation.getJudgeReason(), "없음")).append('\n');
         }
 
         return builder.toString();

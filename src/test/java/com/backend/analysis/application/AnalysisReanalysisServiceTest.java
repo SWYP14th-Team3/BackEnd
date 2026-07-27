@@ -164,6 +164,78 @@ class AnalysisReanalysisServiceTest {
         verify(analysisResultRepository).flush();
     }
 
+    @Test
+    @DisplayName("이전 충족 근거가 현재 이력서에도 남아 있으면 재분석 downgrade를 막는다")
+    void reanalyzePreventsDowngradeWhenPreviousEvidenceStillExists() {
+        AnalysisResult analysisResult = createAnalysisResult();
+        JobRequirement requirement = createRequirement(analysisResult);
+        RequirementEvaluation evaluation = createConfirmedEvaluation(requirement);
+        LocalDateTime analyzedAt = LocalDateTime.of(2026, 7, 26, 18, 0);
+        LocalDateTime autosavedAt = LocalDateTime.of(2026, 7, 26, 18, 5);
+        ReflectionTestUtils.setField(analysisResult, "createdAt", analyzedAt);
+        analysisResult.getUserResume().updateResumeContent(
+                "Spring Boot 프로젝트에서 인증 API를 구현했습니다.\n오탈자를 수정했습니다.",
+                autosavedAt
+        );
+
+        when(analysisResultRepository.findByIdAndDeletedAtIsNull(1L))
+                .thenReturn(Optional.of(analysisResult));
+        when(jobRequirementRepository.findAllByAnalysisResultOrderByInputOrderAscIdAsc(analysisResult))
+                .thenReturn(List.of(requirement));
+        when(requirementEvaluationRepository.findByJobRequirement(requirement))
+                .thenReturn(Optional.of(evaluation));
+        when(geminiAnalysisClient.reanalyze(anyString()))
+                .thenReturn(new GeminiAnalysisResponse(
+                        true,
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of(new GeminiRequirementResult(
+                                "r2",
+                                null,
+                                null,
+                                null,
+                                "없음",
+                                "수정된 이력서에서 Spring Boot 경험을 찾을 수 없어요.",
+                                null,
+                                null,
+                                null,
+                                "red",
+                                null,
+                                null,
+                                null,
+                                null
+                        ))
+                ));
+        when(geminiAnalysisClient.createCardContents(anyString()))
+                .thenReturn(List.of(new GeminiCardContentResult(
+                        "r2",
+                        "green",
+                        "Spring Boot 개발 경험",
+                        "이전 충족 근거가 현재 이력서에도 남아 있습니다.",
+                        null
+                )));
+
+        ReanalysisResponse response = analysisService.reanalyze(
+                1L,
+                1L,
+                "Spring Boot 프로젝트에서 인증 API를 구현했습니다.\n오탈자를 수정했습니다."
+        );
+
+        assertThat(response.getRedCount()).isZero();
+        assertThat(response.getYellowCount()).isZero();
+        assertThat(response.getGreenCount()).isEqualTo(1);
+        assertThat(evaluation.getMatchStatus()).isEqualTo(MatchStatus.CONFIRMED);
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(geminiAnalysisClient).reanalyze(promptCaptor.capture());
+        assertThat(promptCaptor.getValue()).contains("previous_status: green");
+        assertThat(promptCaptor.getValue())
+                .contains("previous_resume_evidence: Spring Boot 프로젝트에서 인증 API를 구현했습니다.");
+        verify(analysisResultRepository).flush();
+    }
+
     private AnalysisResult createAnalysisResult() {
         User user = User.createSocialUser(
                 null,
@@ -233,6 +305,25 @@ class AnalysisReanalysisServiceTest {
                 .sortOrder(1)
                 .build();
         ReflectionTestUtils.setField(evaluation, "id", 1L);
+
+        return evaluation;
+    }
+
+    private RequirementEvaluation createConfirmedEvaluation(JobRequirement requirement) {
+        RequirementEvaluation evaluation = RequirementEvaluation.builder()
+                .jobRequirement(requirement)
+                .matchStatus(MatchStatus.CONFIRMED)
+                .displayTitle("Spring Boot 개발 경험")
+                .resumeEvidence("Spring Boot 프로젝트에서 인증 API를 구현했습니다.")
+                .judgeReason("Spring Boot 개발 경험이 이력서에서 확인됩니다.")
+                .feedback("공고의 Spring Boot 개발 경험이 명확히 확인됩니다.")
+                .revisionSuggestion(null)
+                .effectScore(null)
+                .effortScore(null)
+                .priorityScore(null)
+                .sortOrder(1)
+                .build();
+        ReflectionTestUtils.setField(evaluation, "id", 2L);
 
         return evaluation;
     }

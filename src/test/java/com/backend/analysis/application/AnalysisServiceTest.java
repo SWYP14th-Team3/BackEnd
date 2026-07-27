@@ -2,8 +2,10 @@ package com.backend.analysis.application;
 
 import com.backend.analysis.domain.JobInputType;
 import com.backend.analysis.domain.JobRequirement;
+import com.backend.analysis.domain.MatchStatus;
 import com.backend.analysis.domain.OverallLevel;
 import com.backend.analysis.domain.RequirementCategory;
+import com.backend.analysis.domain.RequirementEvaluation;
 import com.backend.analysis.domain.RequirementType;
 import com.backend.analysis.dto.GeminiPriorityScoreResult;
 import com.backend.analysis.dto.GeminiRequirementResult;
@@ -416,15 +418,29 @@ class AnalysisServiceTest {
                 .jdEvidence("자격요건: React 기반 개발 경험")
                 .inputOrder(0)
                 .build();
+        RequirementEvaluation previousEvaluation = RequirementEvaluation.builder()
+                .jobRequirement(requirement)
+                .matchStatus(MatchStatus.CONFIRMED)
+                .displayTitle("React 기반 개발 경험")
+                .resumeEvidence("React 기반 대시보드 설계 및 구현")
+                .judgeReason("React 프로젝트 경험이 확인됩니다.")
+                .feedback("React 경험이 명확합니다.")
+                .sortOrder(1)
+                .build();
 
         String prompt = ReflectionTestUtils.invokeMethod(
                 analysisService,
                 "buildReanalysisPrompt",
                 List.of(requirement),
+                Map.of("r1", previousEvaluation),
                 "React 기반 대시보드 렌더링 30% 개선"
         );
 
         assertThat(prompt).contains("content / importance / jd_evidence는 참고만 하고 출력하지 마라");
+        assertThat(prompt).contains("previous_status: green");
+        assertThat(prompt).contains("previous_resume_evidence: React 기반 대시보드 설계 및 구현");
+        assertThat(prompt).contains("previous_judge_reason: React 프로젝트 경험이 확인됩니다.");
+        assertThat(prompt).contains("previous_resume_evidence가 수정된 이력서에도 그대로 존재하면 status를 낮추지 마라");
         assertThat(prompt).contains("status, resume_evidence, judge_reason");
         assertThat(prompt).contains("\"req_id\": \"r1\"");
         assertThat(prompt).contains("\"status\": \"green\"");

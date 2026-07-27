@@ -200,6 +200,7 @@ public class AnalysisService {
         saveJobPostingImages(jobDescription, jobImages);
 
         GeminiAnalysisResponse analysisResponse;
+        List<GeminiRequirementResult> analysisRequirements;
         Map<String, GeminiPriorityScoreResult> priorityScoreByReqId;
         Map<String, GeminiCardContentResult> cardContentByReqId;
         try {
@@ -207,14 +208,15 @@ public class AnalysisService {
                     buildAnalysisPrompt(resume.getResumeContent(), jobDescription.getJdContent())
             );
             validateAnalysisResponse(analysisResponse);
+            analysisRequirements = normalizePreferredMissingStatuses(analysisResponse.requirements());
             jobDescription.updateExtractedInfo(analysisResponse.company(), analysisResponse.position());
             priorityScoreByReqId = scoreRedYellowRequirements(
-                    analysisResponse.requirements(),
+                    analysisRequirements,
                     jobDescription.getJdContent(),
                     resume.getResumeContent()
             );
             cardContentByReqId = createCardContents(
-                    analysisResponse.requirements(),
+                    analysisRequirements,
                     priorityScoreByReqId,
                     jobDescription.getJdContent(),
                     resume.getResumeContent()
@@ -223,13 +225,13 @@ public class AnalysisService {
             throw new CustomException(ErrorCode.ANALYSIS_FAILED);
         }
 
-        CountResult countResult = countStatus(analysisResponse.requirements());
+        CountResult countResult = countStatus(analysisRequirements);
         AnalysisResult analysisResult = analysisResultRepository.save(
                 AnalysisResult.builder()
                         .user(user)
                         .userResume(resume)
                         .jobDescription(jobDescription)
-                        .overallLevel(calculateOverallLevel(analysisResponse.requirements()))
+                        .overallLevel(calculateOverallLevel(analysisRequirements))
                         .redCount(countResult.redCount())
                         .yellowCount(countResult.yellowCount())
                         .greenCount(countResult.greenCount())
@@ -238,7 +240,7 @@ public class AnalysisService {
 
         List<JobRequirementResponse> requirements = saveRequirementsAndEvaluations(
                 analysisResult,
-                analysisResponse.requirements(),
+                analysisRequirements,
                 priorityScoreByReqId,
                 cardContentByReqId
         );
@@ -303,6 +305,7 @@ public class AnalysisService {
                     previousEvaluationByReqId,
                     trimmedResumeText
             );
+            stableReanalysisRequirements = normalizePreferredMissingStatuses(stableReanalysisRequirements);
 
             resultByReqId = new HashMap<>();
             for (GeminiRequirementResult item : stableReanalysisRequirements) {
@@ -1081,6 +1084,41 @@ public class AnalysisService {
         return new CountResult(red, yellow, green);
     }
 
+    private List<GeminiRequirementResult> normalizePreferredMissingStatuses(
+            List<GeminiRequirementResult> requirements
+    ) {
+        return requirements.stream()
+                .map(requirement -> {
+                    MatchStatus status = parseMatchStatus(requirement.matchStatus());
+                    RequirementType requirementType = parseRequirementType(parseRequirementCategory(requirement.category()));
+                    if (requirementType == RequirementType.PREFERRED && status == MatchStatus.MISSING) {
+                        return withMatchStatus(requirement, "yellow");
+                    }
+
+                    return requirement;
+                })
+                .toList();
+    }
+
+    private GeminiRequirementResult withMatchStatus(GeminiRequirementResult requirement, String matchStatus) {
+        return new GeminiRequirementResult(
+                requirement.reqId(),
+                requirement.title(),
+                requirement.category(),
+                requirement.sourceText(),
+                requirement.resumeEvidence(),
+                requirement.judgeReason(),
+                requirement.id(),
+                requirement.text(),
+                requirement.type(),
+                matchStatus,
+                requirement.flag(),
+                requirement.evidence(),
+                requirement.feedback(),
+                requirement.revisionSuggestion()
+        );
+    }
+
     private OverallLevel calculateOverallLevel(List<GeminiRequirementResult> requirements) {
         int requiredCount = 0;
         int preferredCount = 0;
@@ -1158,21 +1196,21 @@ public class AnalysisService {
     ) {
         double requiredRate = requiredCount > 0 ? requiredScoreSum / requiredCount : 1.0;
         double preferredRate = preferredCount > 0 ? preferredScoreSum / preferredCount : 1.0;
-        double fitScore = (requiredRate * 0.8 + preferredRate * 0.2) * 100;
+        double fitScore = (requiredRate * 0.7 + preferredRate * 0.3) * 100;
 
         if (requiredRedCount >= 2) {
             return OverallLevel.LOW;
         }
 
         if (requiredRedCount == 1) {
-            return fitScore >= 50 ? OverallLevel.MEDIUM : OverallLevel.LOW;
+            return fitScore >= 60 ? OverallLevel.MEDIUM : OverallLevel.LOW;
         }
 
-        if (fitScore >= 75) {
+        if (fitScore >= 85) {
             return OverallLevel.HIGH;
         }
 
-        if (fitScore >= 50) {
+        if (fitScore >= 60) {
             return OverallLevel.MEDIUM;
         }
 
@@ -1182,7 +1220,7 @@ public class AnalysisService {
     private double matchScore(MatchStatus status) {
         return switch (status) {
             case CONFIRMED -> 1.0;
-            case NEEDS_IMPROVEMENT -> 0.7;
+            case NEEDS_IMPROVEMENT -> 0.5;
             case MISSING -> 0.0;
         };
     }
@@ -1498,9 +1536,15 @@ public class AnalysisService {
                 4) 주요업무에서 도출되는 역량도 요건으로 만든다. 이 경우 importance는 "우대"로 둔다.
 
                 ## STEP 2: 충족도 판정
-                - 구체적으로 있음 (역할·기술·성과 중 2개 이상 명시): green
-                - 언급은 있으나 얕음 (기술명만, 활용 맥락 없음): yellow
-                - 아예 없음: red
+                - 필수 요건
+                  - 구체적으로 있음 (역할·기술·성과 중 2개 이상 명시): green
+                  - 언급은 있으나 얕음 (기술명만, 활용 맥락 없음): yellow
+                  - 아예 없음: red
+                - 우대 요건
+                  - 구체적으로 있음: green
+                  - 언급은 있으나 얕음: green
+                  - 아예 없음: yellow
+                - 절대 규칙: 우대 요건은 red가 될 수 없다. 우대의 바닥은 yellow다.
 
                 # 판정 규칙
                 - 공고가 카테고리로 요구하면 동등 기술을 인정한다.

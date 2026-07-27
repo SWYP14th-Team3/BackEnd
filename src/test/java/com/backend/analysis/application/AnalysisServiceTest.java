@@ -375,6 +375,34 @@ class AnalysisServiceTest {
     }
 
     @Test
+    @DisplayName("우대 요건이 red로 반환되면 yellow로 보정한다")
+    void normalizePreferredMissingStatusToYellow() {
+        List<GeminiRequirementResult> result = ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "normalizePreferredMissingStatuses",
+                List.of(requirement("r1", "우대", "red"))
+        );
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().matchStatus()).isEqualTo("yellow");
+    }
+
+    @Test
+    @DisplayName("적합도는 Green 1.0, Yellow 0.5와 필수 0.7 우대 0.3 기준으로 계산한다")
+    void calculateOverallLevelUsesSpecifiedWeightsAndYellowScore() {
+        OverallLevel result = ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "calculateOverallLevel",
+                List.of(
+                        requirement("r1", "필수", "green"),
+                        requirement("r2", "필수", "yellow")
+                )
+        );
+
+        assertThat(result).isEqualTo(OverallLevel.MEDIUM);
+    }
+
+    @Test
     @DisplayName("필수 red가 2개 이상이면 적합도 점수와 관계없이 하로 계산한다")
     void calculateOverallLevelForTwoRequiredRedsReturnsLow() {
         OverallLevel result = ReflectionTestUtils.invokeMethod(
@@ -406,6 +434,20 @@ class AnalysisServiceTest {
         );
 
         assertThat(result).isEqualTo(OverallLevel.MEDIUM);
+    }
+
+    @Test
+    @DisplayName("최초 분석 프롬프트는 우대 요건 red 금지 규칙을 포함한다")
+    void buildAnalysisPromptContainsPreferredCannotBeRedRule() {
+        String prompt = ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "buildAnalysisPrompt",
+                "Spring Boot 프로젝트 경험",
+                "Spring Boot 경험 우대"
+        );
+
+        assertThat(prompt).contains("우대 요건은 red가 될 수 없다");
+        assertThat(prompt).contains("우대의 바닥은 yellow다");
     }
 
     @Test

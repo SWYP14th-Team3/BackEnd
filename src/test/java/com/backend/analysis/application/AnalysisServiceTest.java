@@ -448,8 +448,8 @@ class AnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("채용공고 프롬프트는 URL과 이미지 내용을 합쳐 중복 제거한 raw_text를 요구한다")
-    void buildJobDescriptionPromptRequestsDeduplicatedRawText() {
+    @DisplayName("채용공고 프롬프트는 입력값을 유지하면서 원문 텍스트와 요약을 요구한다")
+    void buildJobDescriptionPromptRequestsRawTextAndSummaryWithoutBreakingInputs() {
         String prompt = ReflectionTestUtils.invokeMethod(
                 analysisService,
                 "buildJobDescriptionPrompt",
@@ -460,20 +460,21 @@ class AnalysisServiceTest {
                 List.of(jobImage("posting-1.png"))
         );
 
-        assertThat(prompt).contains("하나의 채용공고 문서로 합성한 최종 원문");
-        assertThat(prompt).contains("URL에서 얻은 모집요강과 이미지에서 얻은 직무 상세를 섹션별로 합쳐 하나의 결과만 만든다");
-        assertThat(prompt).contains("\"URL 내용\"과 \"이미지 내용\"처럼 출처별 제목을 만들지 마라");
-        assertThat(prompt).contains("raw_text를 한 문장이나 콤마로 이어진 요약문으로 압축하지 마라");
-        assertThat(prompt).contains("## 모집요강");
-        assertThat(prompt).contains("## 업무내용");
-        assertThat(prompt).contains("## 자격요건");
-        assertThat(prompt).contains("URL과 이미지 전체를 분석해 도출한 업무내용 항목");
-        assertThat(prompt).contains("URL과 이미지 전체를 분석해 도출한 자격요건 항목");
-        assertThat(prompt).contains("이미지 OCR에서 읽은 직무 상세가 raw_text에 빠지면 실패한 응답");
-        assertThat(prompt).contains("같은 의미의 항목이 URL과 이미지에 모두 있으면 한 번만 남긴다");
-        assertThat(prompt).contains("회원가입/로그인");
+        assertThat(prompt).contains("공고의 원문 텍스트를 확보한다");
+        assertThat(prompt).contains("입력 URL에서 이미 크롤링된 텍스트를 기준으로 공고 본문을 확인한다");
+        assertThat(prompt).contains("첨부 이미지와 이미지 OCR 텍스트를 함께 참고해 공고 내용을 읽는다");
+        assertThat(prompt).contains("공고 본문을 있는 그대로 확보한다");
+        assertThat(prompt).contains("이 단계에서는 요건을 추출·평가하지 마라");
+        assertThat(prompt).contains("원문의 줄·항목 구조를 최대한 보존한다");
+        assertThat(prompt).contains("raw_text를 한 문장 요약이나 콤마로 압축하지 마라");
+        assertThat(prompt).contains("summary_text");
+        assertThat(prompt).contains("공고 요약 마크다운");
         assertThat(prompt).contains("inline_data로 함께 첨부");
         assertThat(prompt).contains("posting-1.png");
+        assertThat(prompt).contains("입력 URL");
+        assertThat(prompt).contains("https://example.com/job");
+        assertThat(prompt).contains("입력 텍스트");
+        assertThat(prompt).contains("모집분야: 정보보안 담당");
         assertThat(prompt).contains("이미지 OCR 텍스트");
         assertThat(prompt).contains("업무내용: 정보보호 정책 수립 및 운영");
     }

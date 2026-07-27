@@ -282,25 +282,16 @@ public class GeminiAnalysisClient {
                                         "type", "OBJECT",
                                         "properties", Map.of(
                                                 "req_id", Map.of("type", "STRING"),
-                                                "content", Map.of("type", "STRING"),
-                                                "importance", Map.of(
-                                                        "type", "STRING",
-                                                        "enum", List.of("필수", "우대")
-                                                ),
                                                 "status", Map.of(
                                                         "type", "STRING",
                                                         "enum", List.of("green", "yellow", "red")
                                                 ),
-                                                "jd_evidence", Map.of("type", "STRING"),
                                                 "resume_evidence", Map.of("type", "STRING"),
                                                 "judge_reason", Map.of("type", "STRING")
                                         ),
                                         "required", List.of(
                                                 "req_id",
-                                                "content",
-                                                "importance",
                                                 "status",
-                                                "jd_evidence",
                                                 "resume_evidence",
                                                 "judge_reason"
                                         )

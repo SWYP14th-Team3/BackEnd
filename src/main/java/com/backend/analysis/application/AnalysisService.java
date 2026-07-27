@@ -292,18 +292,22 @@ public class AnalysisService {
                     buildReanalysisPrompt(existingRequirements, trimmedResumeText)
             );
             validateReanalysisResponse(reanalysisResponse, existingRequirements);
+            List<GeminiRequirementResult> reanalysisRequirements = withStoredRequirementMetadata(
+                    reanalysisResponse.requirements(),
+                    existingRequirements
+            );
 
             resultByReqId = new HashMap<>();
-            for (GeminiRequirementResult item : reanalysisResponse.requirements()) {
+            for (GeminiRequirementResult item : reanalysisRequirements) {
                 resultByReqId.put(item.reqId(), item);
             }
             priorityScoreByReqId = scoreRedYellowRequirements(
-                    reanalysisResponse.requirements(),
+                    reanalysisRequirements,
                     analysisResult.getJobDescription().getJdContent(),
                     trimmedResumeText
             );
             cardContentByReqId = createCardContents(
-                    reanalysisResponse.requirements(),
+                    reanalysisRequirements,
                     priorityScoreByReqId,
                     analysisResult.getJobDescription().getJdContent(),
                     trimmedResumeText
@@ -338,7 +342,7 @@ public class AnalysisService {
             );
         }
 
-        CountResult countResult = countStatus(reanalysisResponse.requirements());
+        CountResult countResult = countStatus(new ArrayList<>(resultByReqId.values()));
         LocalDateTime reanalyzedAt = LocalDateTime.now();
         analysisResult.getUserResume().updateResumeContent(trimmedResumeText, reanalyzedAt);
         analysisResult.applyReanalysis(
@@ -886,14 +890,45 @@ public class AnalysisService {
         for (JobRequirement requirement : existingRequirements) {
             GeminiRequirementResult item = resultByReqId.get(reanalysisReqId(requirement));
             if (item == null
-                    || !requirement.getTitle().equals(item.title())
-                    || !requirementImportance(requirement).equals(item.category())
                     || !hasText(item.matchStatus())
                     || !hasText(item.resumeEvidence())
                     || !hasText(item.judgeReason())) {
                 throw new CustomException(ErrorCode.GEMINI_RESPONSE_PARSE_ERROR);
             }
         }
+    }
+
+    private List<GeminiRequirementResult> withStoredRequirementMetadata(
+            List<GeminiRequirementResult> reanalysisRequirements,
+            List<JobRequirement> existingRequirements
+    ) {
+        Map<String, GeminiRequirementResult> resultByReqId = new HashMap<>();
+        for (GeminiRequirementResult requirement : reanalysisRequirements) {
+            resultByReqId.put(requirement.reqId(), requirement);
+        }
+
+        List<GeminiRequirementResult> enrichedRequirements = new ArrayList<>();
+        for (JobRequirement requirement : existingRequirements) {
+            GeminiRequirementResult result = resultByReqId.get(reanalysisReqId(requirement));
+            enrichedRequirements.add(new GeminiRequirementResult(
+                    reanalysisReqId(requirement),
+                    requirement.getTitle(),
+                    requirementImportance(requirement),
+                    defaultIfBlank(requirement.getJdEvidence(), requirement.getTitle()),
+                    result.resumeEvidence(),
+                    result.judgeReason(),
+                    result.id(),
+                    result.text(),
+                    result.type(),
+                    result.matchStatus(),
+                    result.flag(),
+                    result.evidence(),
+                    result.feedback(),
+                    result.revisionSuggestion()
+            ));
+        }
+
+        return enrichedRequirements;
     }
 
     private void validateJobDescriptionResponse(GeminiJobDescriptionResponse jobDescriptionResponse) {
@@ -1416,22 +1451,28 @@ public class AnalysisService {
                 이번 요청은 재분석이다. 유저가 이력서를 수정한 뒤 다시 분석하는 상황이다.
 
                 # 입력
-                - requirements: 기존 분석에서 확정된 요건 목록
-                  (각 항목: req_id, content, importance[필수/우대])
+                - requirements: 최초 분석에서 확정된 요건 목록. 각 항목은 다음을 포함한다.
+                  - req_id: 요건 식별자 (항목을 짝짓는 기준)
+                  - content: 요건 문구
+                  - importance: 필수 / 우대
+                  - jd_evidence: 이 요건이 나온 공고 원문 문장
+                  ※ 위 네 값은 읽기 전용 참고 자료다. 판정의 기준으로만 쓰고,
+                    출력에 다시 담지 마라.
                 - 수정된 이력서 원문 텍스트
 
-                # 【최우선 규칙】 요건은 절대 건드리지 마라
-                요건은 이미 확정되어 있다. 다시 뽑지 마라.
+                # 【최우선 규칙】 요건은 이미 확정됐다 — 다시 만들지 마라
+                요건은 최초 분석에서 확정돼 DB에 저장돼 있다. 너는 요건을 새로 뽑는 게 아니다.
                 - 요건을 추가하지 마라.
                 - 요건을 삭제하지 마라.
-                - content(요건 문구)를 바꾸거나 다듬지 마라.
-                - importance(필수/우대)를 바꾸지 마라.
+                - content / importance / jd_evidence는 참고만 하고 출력하지 마라.
                 - req_id를 그대로 유지하라. 이전 분석과 항목을 짝짓는 기준이다.
 
                 입력으로 받은 요건 개수와 출력 개수가 반드시 같아야 한다.
+                입력에 있는 모든 req_id가 출력에 하나도 빠짐없이 등장해야 한다.
 
                 # 네가 할 일
-                각 요건을 '수정된 이력서'와 대조해 status와 judge_reason만 새로 판정한다.
+                각 요건을 '수정된 이력서'와 대조해, 이력서 때문에 달라지는 세 가지만 새로 만든다.
+                  → status, resume_evidence, judge_reason
 
                 ## 충족도 판정 기준 (필수·우대 동일)
                 - green = 구체적으로 있음 (역할·기술·성과 중 2개 이상 명시)
@@ -1442,37 +1483,43 @@ public class AnalysisService {
                 역할(설계/구현/운영/최적화), 기술(도구), 성과(정량 결과·산출물)
 
                 ## 판정 규칙
-                1) 동등 기술: 공고가 카테고리로 요구하면 동등 기술 인정(green).
-                   특정 기술을 콕 집었는데 유사 기술만 있으면 yellow.
+                1) 동등 기술: 이 요건의 jd_evidence(공고 원문 문장)를 보고 판단하라.
+                   공고가 카테고리로 요구하면("RDBMS 경험") 동등 기술을 인정(green).
+                   특정 기술을 콕 집었는데("Kotlin 필수") 유사 기술만 있으면 yellow.
                 2) 프로젝트 설명 속 기술도 찾아낸다. 기술스택 목록에 없어도
                    프로젝트에서 사용이 확인되면 인정. 이름만 있고 활용 근거 없으면 yellow.
                 3) 같은 것의 다른 표현을 놓치지 마라 (REST API=RESTful, Git=형상관리 등).
-                4) 없는 경험을 지어내지 마라. 이력서에 실제 있는 것만 근거로.
+                4) 없는 경험을 지어내지 마라. 이력서에 실제 있는 것만 근거로. 없으면 red.
                 5) 애매하게 판정하지 마라("~일 수 있음" 금지). 확실하게 하나로.
-                6) 이전 판정에 얽매이지 마라. 지금 이력서만 보고 새로 판정한다.
+                6) 이전 판정에 얽매이지 마라. 지금 수정된 이력서만 보고 새로 판정한다.
                    수정으로 좋아졌으면 올리고, 그대로면 그대로 둔다.
 
                 # 근거 강제 (모든 판정에 필수)
-                - jd_evidence: 이 요건의 공고 근거 (기존 content 기준)
-                - resume_evidence: 수정된 이력서 어디서 근거를 찾았는가
-                  (원문 발췌, 없으면 "없음")
+                - resume_evidence: 수정된 이력서 어디서 근거를 찾았는가.
+                  이력서에 실제로 있는 문장을 원문 그대로 발췌한다. 없으면 "없음".
+                  (지어낸 문장 금지 — 이력서에 없는 표현을 쓰면 안 된다)
                 - judge_reason: 왜 이 충족도인지 유저가 읽는 문장으로 작성.
                   카드의 '근거' 칸에 그대로 노출된다.
-                  판정과 뉘앙스가 어긋나지 않게 쓴다(red인데 완곡하게 흐리지 마라).
+                  * 판정과 뉘앙스가 어긋나지 않게 쓴다 (red인데 완곡하게 흐리지 마라).
+                  * 재분석 맥락을 반영한다.
+                    - green으로 올랐으면: "이번 수정에서 ~가 추가돼 충족돼요."
+                    - 여전히 red면: "수정된 이력서에서도 ~를 찾을 수 없어요."
 
-                # 출력
+                # 출력 (JSON) — 입력 요건과 개수·req_id 동일해야 함
                 JSON 객체 하나만 반환해. 코드블록과 JSON 밖 설명은 쓰지 마.
-                입력 요건과 개수·req_id는 반드시 동일해야 한다.
                 {
                   "requirements": [
                     {
                       "req_id": "r1",
-                      "content": "React 기반 개발 경험",
-                      "importance": "필수",
                       "status": "green",
-                      "jd_evidence": "자격요건: React 기반 개발 경험",
                       "resume_evidence": "React 기반 대시보드 설계 및 구현, 렌더링 30%% 개선",
                       "judge_reason": "이번 수정에서 React 프로젝트 경험이 역할과 성과까지 함께 추가돼 충족돼요."
+                    },
+                    {
+                      "req_id": "r2",
+                      "status": "red",
+                      "resume_evidence": "없음",
+                      "judge_reason": "공고 우대사항인데, 수정된 이력서에서도 커머스 관련 경험을 찾을 수 없어요."
                     }
                   ]
                 }

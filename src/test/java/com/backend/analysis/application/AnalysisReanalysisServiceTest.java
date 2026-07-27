@@ -21,6 +21,7 @@ import com.backend.user.domain.Provider;
 import com.backend.user.domain.User;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -118,9 +119,9 @@ class AnalysisReanalysisServiceTest {
                         null,
                         List.of(new GeminiRequirementResult(
                                 "r2",
-                                "Spring Boot 개발 경험",
-                                "필수",
-                                "Spring Boot 기반 백엔드 개발 경험 보유자",
+                                null,
+                                null,
+                                null,
                                 "수정된 이력서 텍스트",
                                 "수정된 이력서에서 Spring Boot 경험이 확인됩니다.",
                                 null,
@@ -155,6 +156,11 @@ class AnalysisReanalysisServiceTest {
         assertThat(response.getResumeCurrentText()).isEqualTo("수정된 이력서 텍스트");
 
         verify(geminiAnalysisClient).reanalyze(anyString());
+        ArgumentCaptor<String> cardPromptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(geminiAnalysisClient).createCardContents(cardPromptCaptor.capture());
+        assertThat(cardPromptCaptor.getValue()).contains("content: Spring Boot 개발 경험");
+        assertThat(cardPromptCaptor.getValue()).contains("importance: 필수");
+        assertThat(cardPromptCaptor.getValue()).contains("jd_evidence: Spring Boot 기반 백엔드 개발 경험 보유자");
         verify(analysisResultRepository).flush();
     }
 

@@ -407,8 +407,8 @@ class AnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("재분석 프롬프트 예시의 퍼센트 문자는 포맷 예외를 발생시키지 않는다")
-    void buildReanalysisPromptEscapesLiteralPercent() {
+    @DisplayName("재분석 프롬프트는 확정 요건을 참고만 하고 판정 필드만 출력하도록 요청한다")
+    void buildReanalysisPromptRequestsEvaluationOnlyOutput() {
         JobRequirement requirement = JobRequirement.builder()
                 .requirementType(RequirementType.REQUIRED)
                 .category(RequirementCategory.QUALIFICATION)
@@ -424,6 +424,15 @@ class AnalysisServiceTest {
                 "React 기반 대시보드 렌더링 30% 개선"
         );
 
+        assertThat(prompt).contains("content / importance / jd_evidence는 참고만 하고 출력하지 마라");
+        assertThat(prompt).contains("status, resume_evidence, judge_reason");
+        assertThat(prompt).contains("\"req_id\": \"r1\"");
+        assertThat(prompt).contains("\"status\": \"green\"");
+        assertThat(prompt).contains("\"resume_evidence\"");
+        assertThat(prompt).contains("\"judge_reason\"");
+        assertThat(prompt).doesNotContain("\"content\": \"React 기반 개발 경험\"");
+        assertThat(prompt).doesNotContain("\"importance\": \"필수\"");
+        assertThat(prompt).doesNotContain("\"jd_evidence\": \"자격요건: React 기반 개발 경험\"");
         assertThat(prompt).contains("렌더링 30% 개선");
         assertThat(prompt).contains("React 기반 대시보드 렌더링 30% 개선");
     }

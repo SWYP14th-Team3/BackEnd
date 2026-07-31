@@ -691,6 +691,9 @@ class AnalysisServiceTest {
         assertThat(prompt).contains("공고의 원문 텍스트를 확보한다");
         assertThat(prompt).contains("입력 URL에서 이미 크롤링된 텍스트를 기준으로 공고 본문을 확인한다");
         assertThat(prompt).contains("첨부 이미지와 이미지 OCR 텍스트를 함께 참고해 공고 내용을 읽는다");
+        assertThat(prompt).contains("URL 크롤링 텍스트가 비어 있어도 텍스트/OCR/첨부 이미지 중 하나에서 공고 본문을 읽을 수 있으면 성공으로 처리한다");
+        assertThat(prompt).contains("URL 크롤링 텍스트, 입력 텍스트, 이미지 OCR 텍스트, 첨부 이미지 모두에서 채용공고 본문을 읽을 수 없음");
+        assertThat(prompt).doesNotContain("URL 접근 불가 / 페이지 로드 실패");
         assertThat(prompt).contains("공고 본문을 있는 그대로 확보한다");
         assertThat(prompt).contains("이 단계에서는 요건을 추출·평가하지 마라");
         assertThat(prompt).contains("원문의 줄·항목 구조를 최대한 보존한다");

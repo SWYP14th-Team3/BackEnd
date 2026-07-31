@@ -681,10 +681,10 @@ public class AnalysisService {
     }
 
     private String summarizeResumeText(MultipartFile resumePdf) {
+        String extractedText = extractResumeText(resumePdf);
         try {
             GeminiResumeResponse resumeResponse = geminiAnalysisClient.summarizeResume(
-                    resumePdf,
-                    buildResumePrompt(resumePdf.getOriginalFilename())
+                    buildResumePrompt(resumePdf.getOriginalFilename(), extractedText)
             );
 
             if (resumeResponse == null || !hasText(resumeResponse.resumeContent())) {
@@ -1387,22 +1387,23 @@ public class AnalysisService {
         return OffsetDateTime.now(ZoneOffset.ofHours(9)).toString();
     }
 
-    private String buildResumePrompt(String originalFilename) {
+    private String buildResumePrompt(String originalFilename, String extractedResumeText) {
         return """
-                주어진 이력서 PDF를 읽고 개발자 이력서 분석에 필요한 형태로 재정리해줘.
+                아래 이력서 추출 텍스트를 개발자 이력서 분석에 필요한 형태로 정규화해줘.
                 JSON 객체 하나만 반환하고 코드블록이나 설명은 쓰지 마.
 
                 작성 규칙:
                 - resumeContent는 아래 이력서 양식만 담는다.
-                - PDF에 있는 이름, 연락처, 이메일을 최상단에 배치한다.
+                - 추출 텍스트에 있는 이름, 연락처, 이메일을 최상단에 배치한다.
                 - 섹션 순서는 PROFESSIONAL SUMMARY, SKILLS, WORK EXPERIENCE, PROJECTS, EDUCATION 순서로 작성한다.
-                - PROFESSIONAL SUMMARY는 개발자 강점이 드러나도록 3~5문장으로 정리한다.
+                - PROFESSIONAL SUMMARY는 추출 텍스트에 근거가 있는 개발자 강점만 3~5문장으로 정리한다.
                 - SKILLS는 Languages & Frameworks, Database, DevOps & Tools, AI Collaboration 같은 묶음으로 정리한다.
                 - WORK EXPERIENCE는 회사명 | 역할 | 기간 형식으로 쓰고, 주요 성과는 ● bullet로 작성한다.
                 - PROJECTS는 과정명이나 프로젝트명 | 상태 또는 기간 형식으로 쓰고, 성과는 ● bullet로 작성한다.
                 - EDUCATION은 학교명 | 전공/상태 형식으로 작성한다.
                 - 숫자 성과, 기간, 기술명은 원문에 있는 내용을 우선 사용한다.
                 - 원문에 없는 경력, 수치, 기술, 연락처를 지어내지 마라.
+                - 같은 입력 텍스트라면 같은 resumeContent가 나오도록 문장 순서와 표현을 안정적으로 유지한다.
                 - 해당 섹션의 근거가 없으면 섹션 제목은 유지하되 "기재된 내용 없음"이라고 작성한다.
                 - 깨진 줄바꿈은 자연스럽게 정리한다.
 
@@ -1438,8 +1439,9 @@ public class AnalysisService {
                   "resumeFileName": "%s"
                 }
 
-                현재 시점: %s
-                """.formatted(buildResumeFileName(originalFilename), nowText());
+                이력서 추출 텍스트:
+                %s
+                """.formatted(buildResumeFileName(originalFilename), extractedResumeText);
     }
 
     private String buildJobDescriptionPrompt(

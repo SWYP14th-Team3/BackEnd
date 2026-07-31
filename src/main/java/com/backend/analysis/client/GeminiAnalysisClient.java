@@ -50,11 +50,12 @@ public class GeminiAnalysisClient {
         this.model = model;
     }
 
-    public GeminiResumeResponse summarizeResume(MultipartFile resumePdf, String prompt) {
-        // 이력서 PDF와 프롬프트를 함께 보내 이력서 내용을 정리
+    public GeminiResumeResponse summarizeResume(String prompt) {
+        // PDFBox로 추출한 이력서 텍스트를 정해진 형식으로 정리
         return generate(
-                List.of(inlineDataPart(resumePdf, "application/pdf"), textPart(prompt)),
-                GeminiResumeResponse.class
+                List.of(textPart(prompt)),
+                GeminiResumeResponse.class,
+                resumeResponseSchema()
         );
     }
 
@@ -321,6 +322,18 @@ public class GeminiAnalysisClient {
                         "summary_text", Map.of("type", "STRING")
                 ),
                 "required", List.of("success", "raw_text", "summary_text")
+        );
+    }
+
+    private Map<String, Object> resumeResponseSchema() {
+        // 이력서 정리 결과를 반환
+        return Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "resumeContent", Map.of("type", "STRING"),
+                        "resumeFileName", Map.of("type", "STRING")
+                ),
+                "required", List.of("resumeContent", "resumeFileName")
         );
     }
 

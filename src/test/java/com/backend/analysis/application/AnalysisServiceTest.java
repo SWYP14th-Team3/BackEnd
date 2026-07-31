@@ -12,6 +12,7 @@ import com.backend.analysis.domain.RequirementType;
 import com.backend.analysis.dto.GeminiJobDescriptionResponse;
 import com.backend.analysis.dto.GeminiPriorityScoreResult;
 import com.backend.analysis.dto.GeminiRequirementResult;
+import com.backend.analysis.dto.GeminiResumeResponse;
 import com.backend.global.exception.CustomException;
 import com.backend.global.exception.ErrorCode;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -136,6 +137,29 @@ class AnalysisServiceTest {
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.RESUME_LOAD_FAILED);
+    }
+
+    @Test
+    @DisplayName("이력서 정리는 PDFBox로 추출한 텍스트를 Gemini 프롬프트에 전달한다")
+    void summarizeResumeTextUsesExtractedPdfTextAsPromptSource() throws IOException {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "resume.pdf",
+                "application/pdf",
+                createTextPdf("Spring Boot backend developer")
+        );
+        GeminiAnalysisClient geminiAnalysisClient = mock(GeminiAnalysisClient.class);
+        AnalysisService service = analysisService(null, geminiAnalysisClient);
+        when(geminiAnalysisClient.summarizeResume(anyString()))
+                .thenReturn(new GeminiResumeResponse("정규화된 이력서", "resume_정리본.md"));
+
+        String resumeText = ReflectionTestUtils.invokeMethod(service, "summarizeResumeText", file);
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(geminiAnalysisClient).summarizeResume(promptCaptor.capture());
+        assertThat(resumeText).isEqualTo("정규화된 이력서");
+        assertThat(promptCaptor.getValue()).contains("이력서 추출 텍스트");
+        assertThat(promptCaptor.getValue()).contains("Spring Boot backend developer");
     }
 
     @Test

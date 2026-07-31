@@ -259,8 +259,8 @@ class AnalysisServiceTest {
 
         ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
         verify(geminiAnalysisClient).summarizeJobDescription(promptCaptor.capture(), anyList());
-        assertThat(promptCaptor.getValue()).contains("[직접 입력 텍스트]");
         assertThat(promptCaptor.getValue()).contains(fallbackText);
+        assertThat(promptCaptor.getValue()).doesNotContain(jobUrl);
     }
 
     @Test
@@ -291,6 +291,7 @@ class AnalysisServiceTest {
         ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
         verify(geminiAnalysisClient).summarizeJobDescription(promptCaptor.capture(), anyList());
         assertThat(promptCaptor.getValue()).contains("이미지 OCR로 읽은 자격요건");
+        assertThat(promptCaptor.getValue()).doesNotContain(jobUrl);
         verify(geminiAnalysisClient).extractJobPostingImageText(anyList(), anyString());
     }
 

@@ -740,11 +740,22 @@ public class AnalysisService {
     ) {
         List<MultipartFile> presentJobImages = presentImages(jobImages);
         try {
-            String crawledText = collectJobPostingText(jobInputType, jobUrl, jobText, !presentJobImages.isEmpty());
+            JobPostingInputContent inputContent = collectJobPostingInputContent(
+                    jobInputType,
+                    jobUrl,
+                    jobText,
+                    !presentJobImages.isEmpty()
+            );
             String platform = jobPostingCrawler.extractPlatform(jobUrl);
             String imageText = extractJobPostingImageText(presentJobImages);
             GeminiJobDescriptionResponse jobDescriptionResponse = geminiAnalysisClient.summarizeJobDescription(
-                    buildJobDescriptionPrompt(jobUrl, crawledText, imageText, platform, presentJobImages),
+                    buildJobDescriptionPrompt(
+                            inputContent.jobPostingUrl(),
+                            inputContent.jobPostingText(),
+                            imageText,
+                            platform,
+                            presentJobImages
+                    ),
                     presentJobImages
             );
             validateJobDescriptionResponse(jobDescriptionResponse);
@@ -1051,18 +1062,18 @@ public class AnalysisService {
         }
     }
 
-    private String collectJobPostingText(
+    private JobPostingInputContent collectJobPostingInputContent(
             JobInputType jobInputType,
             String jobUrl,
             String jobText,
             boolean hasJobImages
     ) {
         if (jobInputType == JobInputType.TEXT) {
-            return jobText.trim();
+            return new JobPostingInputContent(null, jobText.trim());
         }
 
         if (jobInputType == JobInputType.IMAGE && !hasText(jobUrl)) {
-            return "";
+            return new JobPostingInputContent(null, "");
         }
 
         String crawledText;
@@ -1073,10 +1084,10 @@ public class AnalysisService {
                 throw e;
             }
             log.warn("Failed to crawl job posting URL, continue with fallback input. jobUrl={}", jobUrl);
-            crawledText = "";
+            return new JobPostingInputContent(null, defaultIfBlank(jobText, "").trim());
         }
 
-        return mergeJobPostingTexts(crawledText, jobText);
+        return new JobPostingInputContent(jobUrl, mergeJobPostingTexts(crawledText, jobText));
     }
 
     private String mergeJobPostingTexts(String crawledText, String jobText) {
@@ -1089,6 +1100,12 @@ public class AnalysisService {
         }
 
         return String.join("\n\n", parts);
+    }
+
+    private record JobPostingInputContent(
+            String jobPostingUrl,
+            String jobPostingText
+    ) {
     }
 
     private List<MultipartFile> presentImages(List<MultipartFile> jobImages) {

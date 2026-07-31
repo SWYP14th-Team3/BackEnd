@@ -740,7 +740,7 @@ public class AnalysisService {
     ) {
         List<MultipartFile> presentJobImages = presentImages(jobImages);
         try {
-            String crawledText = crawlJobPostingText(jobInputType, jobUrl, jobText);
+            String crawledText = collectJobPostingText(jobInputType, jobUrl, jobText, !presentJobImages.isEmpty());
             String platform = jobPostingCrawler.extractPlatform(jobUrl);
             String imageText = extractJobPostingImageText(presentJobImages);
             GeminiJobDescriptionResponse jobDescriptionResponse = geminiAnalysisClient.summarizeJobDescription(
@@ -789,8 +789,11 @@ public class AnalysisService {
         validateJobImageFormats(presentImages);
 
         if (jobInputType == JobInputType.URL) {
-            if (!hasUrl || hasJobText || !isHttpUrl(jobUrl)) {
+            if (!hasUrl || !isHttpUrl(jobUrl)) {
                 throw new CustomException(ErrorCode.INVALID_JOB_URL);
+            }
+            if (hasJobText) {
+                validateJobTextLength(jobText);
             }
 
             return;
@@ -800,25 +803,36 @@ public class AnalysisService {
             if (hasUrl) {
                 throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
             }
-            if (!hasJobText || jobText.trim().length() < 100) {
+            if (!hasJobText) {
                 throw new CustomException(ErrorCode.JOB_TEXT_TOO_SHORT);
             }
-            if (jobText.trim().length() >= 6000) {
-                throw new CustomException(ErrorCode.JOB_TEXT_TOO_LONG);
-            }
+            validateJobTextLength(jobText);
 
             return;
         }
 
         if (jobInputType == JobInputType.IMAGE) {
-            if (hasUrl || hasJobText || !hasJobImage) {
+            if (hasJobText || !hasJobImage) {
                 throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+            }
+            if (hasUrl && !isHttpUrl(jobUrl)) {
+                throw new CustomException(ErrorCode.INVALID_JOB_URL);
             }
 
             return;
         }
 
         throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+    }
+
+    private void validateJobTextLength(String jobText) {
+        int length = jobText.trim().length();
+        if (length < 100) {
+            throw new CustomException(ErrorCode.JOB_TEXT_TOO_SHORT);
+        }
+        if (length >= 6000) {
+            throw new CustomException(ErrorCode.JOB_TEXT_TOO_LONG);
+        }
     }
 
     private void validateJobImageFormats(List<MultipartFile> jobImages) {
@@ -1037,16 +1051,44 @@ public class AnalysisService {
         }
     }
 
-    private String crawlJobPostingText(JobInputType jobInputType, String jobUrl, String jobText) {
+    private String collectJobPostingText(
+            JobInputType jobInputType,
+            String jobUrl,
+            String jobText,
+            boolean hasJobImages
+    ) {
         if (jobInputType == JobInputType.TEXT) {
             return jobText.trim();
         }
 
-        if (jobInputType == JobInputType.IMAGE) {
+        if (jobInputType == JobInputType.IMAGE && !hasText(jobUrl)) {
             return "";
         }
 
-        return jobPostingCrawler.extractText(jobUrl.trim());
+        String crawledText;
+        try {
+            crawledText = jobPostingCrawler.extractText(jobUrl.trim());
+        } catch (CustomException e) {
+            if (e.getErrorCode() != ErrorCode.JOB_POSTING_CRAWL_ERROR || (!hasText(jobText) && !hasJobImages)) {
+                throw e;
+            }
+            log.warn("Failed to crawl job posting URL, continue with fallback input. jobUrl={}", jobUrl);
+            crawledText = "";
+        }
+
+        return mergeJobPostingTexts(crawledText, jobText);
+    }
+
+    private String mergeJobPostingTexts(String crawledText, String jobText) {
+        List<String> parts = new ArrayList<>();
+        if (hasText(crawledText)) {
+            parts.add("[URL 크롤링 텍스트]\n" + crawledText.trim());
+        }
+        if (hasText(jobText)) {
+            parts.add("[직접 입력 텍스트]\n" + jobText.trim());
+        }
+
+        return String.join("\n\n", parts);
     }
 
     private List<MultipartFile> presentImages(List<MultipartFile> jobImages) {

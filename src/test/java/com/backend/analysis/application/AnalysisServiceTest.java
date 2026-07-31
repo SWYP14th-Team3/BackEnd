@@ -1,5 +1,7 @@
 package com.backend.analysis.application;
 
+import com.backend.analysis.client.GeminiAnalysisClient;
+import com.backend.analysis.client.JobPostingCrawler;
 import com.backend.analysis.domain.JobInputType;
 import com.backend.analysis.domain.JobRequirement;
 import com.backend.analysis.domain.MatchStatus;
@@ -7,6 +9,7 @@ import com.backend.analysis.domain.OverallLevel;
 import com.backend.analysis.domain.RequirementCategory;
 import com.backend.analysis.domain.RequirementEvaluation;
 import com.backend.analysis.domain.RequirementType;
+import com.backend.analysis.dto.GeminiJobDescriptionResponse;
 import com.backend.analysis.dto.GeminiPriorityScoreResult;
 import com.backend.analysis.dto.GeminiRequirementResult;
 import com.backend.global.exception.CustomException;
@@ -18,6 +21,7 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -32,20 +36,15 @@ import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class AnalysisServiceTest {
 
-    private final AnalysisService analysisService = new AnalysisService(
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-    );
+    private final AnalysisService analysisService = analysisService(null, null);
 
     @Test
     @DisplayName("PDF 헤더가 있으면 MIME 타입이 달라도 통과한다")
@@ -140,8 +139,10 @@ class AnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("URL 입력 방식은 jobUrl만 허용한다")
-    void validateJobPostingInputAcceptsOnlyJobUrlForUrlType() {
+    @DisplayName("URL 입력 방식은 jobUrl과 보조 공고 텍스트를 함께 허용한다")
+    void validateJobPostingInputAcceptsJobTextWithUrlType() {
+        String validJobText = "a".repeat(100);
+
         assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
                 analysisService,
                 "validateJobPostingInput",
@@ -151,17 +152,42 @@ class AnalysisServiceTest {
                 null
         ));
 
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.URL,
+                "https://company.com/jobs/123",
+                validJobText,
+                null
+        ));
+    }
+
+    @Test
+    @DisplayName("URL 입력 방식의 보조 공고 텍스트는 길이 조건을 검증한다")
+    void validateJobPostingInputValidatesFallbackJobTextWithUrlType() {
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
                 analysisService,
                 "validateJobPostingInput",
                 JobInputType.URL,
                 "https://company.com/jobs/123",
-                "직접 입력 공고 텍스트",
+                "a".repeat(99),
                 null
         ))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.INVALID_JOB_URL);
+                .isEqualTo(ErrorCode.JOB_TEXT_TOO_SHORT);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.URL,
+                "https://company.com/jobs/123",
+                "a".repeat(6000),
+                null
+        ))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.JOB_TEXT_TOO_LONG);
     }
 
     @Test
@@ -182,6 +208,66 @@ class AnalysisServiceTest {
                 null,
                 List.of(image)
         ));
+    }
+
+    @Test
+    @DisplayName("URL 크롤링이 실패해도 보조 텍스트가 있으면 채용공고 정리를 계속한다")
+    void loadJobPostingDraftContinuesWithJobTextWhenUrlCrawlFails() {
+        String jobUrl = "https://company.com/jobs/123";
+        String fallbackText = "백엔드 개발자 채용 공고입니다. Spring Boot 기반 API 개발과 MySQL 운영 경험을 요구합니다.".repeat(2);
+        JobPostingCrawler jobPostingCrawler = mock(JobPostingCrawler.class);
+        GeminiAnalysisClient geminiAnalysisClient = mock(GeminiAnalysisClient.class);
+        AnalysisService service = analysisService(jobPostingCrawler, geminiAnalysisClient);
+        when(jobPostingCrawler.extractText(jobUrl))
+                .thenThrow(new CustomException(ErrorCode.JOB_POSTING_CRAWL_ERROR));
+        when(jobPostingCrawler.extractPlatform(jobUrl)).thenReturn("UNKNOWN");
+        when(geminiAnalysisClient.summarizeJobDescription(anyString(), anyList()))
+                .thenReturn(new GeminiJobDescriptionResponse(true, "raw text", "summary text"));
+
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
+                service,
+                "loadJobPostingDraft",
+                JobInputType.URL,
+                jobUrl,
+                fallbackText,
+                List.of()
+        ));
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(geminiAnalysisClient).summarizeJobDescription(promptCaptor.capture(), anyList());
+        assertThat(promptCaptor.getValue()).contains("[직접 입력 텍스트]");
+        assertThat(promptCaptor.getValue()).contains(fallbackText);
+    }
+
+    @Test
+    @DisplayName("URL 크롤링이 실패해도 이미지가 있으면 OCR 결과로 채용공고 정리를 계속한다")
+    void loadJobPostingDraftContinuesWithJobImageWhenUrlCrawlFails() {
+        String jobUrl = "https://company.com/jobs/123";
+        MockMultipartFile image = jobImage("job.png");
+        JobPostingCrawler jobPostingCrawler = mock(JobPostingCrawler.class);
+        GeminiAnalysisClient geminiAnalysisClient = mock(GeminiAnalysisClient.class);
+        AnalysisService service = analysisService(jobPostingCrawler, geminiAnalysisClient);
+        when(jobPostingCrawler.extractText(jobUrl))
+                .thenThrow(new CustomException(ErrorCode.JOB_POSTING_CRAWL_ERROR));
+        when(jobPostingCrawler.extractPlatform(jobUrl)).thenReturn("UNKNOWN");
+        when(geminiAnalysisClient.extractJobPostingImageText(anyList(), anyString()))
+                .thenReturn("이미지 OCR로 읽은 자격요건: Java, Spring Boot 경험");
+        when(geminiAnalysisClient.summarizeJobDescription(anyString(), anyList()))
+                .thenReturn(new GeminiJobDescriptionResponse(true, "raw text", "summary text"));
+
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
+                service,
+                "loadJobPostingDraft",
+                JobInputType.URL,
+                jobUrl,
+                null,
+                List.of(image)
+        ));
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(geminiAnalysisClient).summarizeJobDescription(promptCaptor.capture(), anyList());
+        assertThat(promptCaptor.getValue()).contains("이미지 OCR로 읽은 자격요건");
+        verify(geminiAnalysisClient).extractJobPostingImageText(anyList(), anyString());
     }
 
     @Test
@@ -236,8 +322,8 @@ class AnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("IMAGE 입력 방식은 jobImages만 허용하고 최대 10장까지 받는다")
-    void validateJobPostingInputAcceptsOnlyJobImagesForImageType() {
+    @DisplayName("IMAGE 입력 방식은 jobImages와 보조 URL을 허용하고 최대 10장까지 받는다")
+    void validateJobPostingInputAcceptsJobImagesAndUrlForImageType() {
         List<MockMultipartFile> validImages = List.of(jobImage("job-1.png"));
 
         assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
@@ -249,12 +335,33 @@ class AnalysisServiceTest {
                 validImages
         ));
 
-        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
                 analysisService,
                 "validateJobPostingInput",
                 JobInputType.IMAGE,
                 "https://company.com/jobs/123",
                 null,
+                validImages
+        ));
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.IMAGE,
+                "ftp://company.com/jobs/123",
+                null,
+                validImages
+        ))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_JOB_URL);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                analysisService,
+                "validateJobPostingInput",
+                JobInputType.IMAGE,
+                null,
+                "직접 입력 공고 텍스트",
                 validImages
         ))
                 .isInstanceOf(CustomException.class)
@@ -295,6 +402,36 @@ class AnalysisServiceTest {
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.TOO_MANY_JOB_IMAGES);
+    }
+
+    @Test
+    @DisplayName("IMAGE 입력 방식에 URL이 있으면 크롤링 텍스트와 이미지 OCR 결과를 함께 정리한다")
+    void loadJobPostingDraftCombinesCrawledTextAndImageTextForImageUrlInput() {
+        String jobUrl = "https://company.com/jobs/123";
+        MockMultipartFile image = jobImage("job.png");
+        JobPostingCrawler jobPostingCrawler = mock(JobPostingCrawler.class);
+        GeminiAnalysisClient geminiAnalysisClient = mock(GeminiAnalysisClient.class);
+        AnalysisService service = analysisService(jobPostingCrawler, geminiAnalysisClient);
+        when(jobPostingCrawler.extractText(jobUrl)).thenReturn("URL에서 읽은 자격요건: Spring Boot 경험");
+        when(jobPostingCrawler.extractPlatform(jobUrl)).thenReturn("UNKNOWN");
+        when(geminiAnalysisClient.extractJobPostingImageText(anyList(), anyString()))
+                .thenReturn("이미지 OCR로 읽은 우대사항: AWS 운영 경험");
+        when(geminiAnalysisClient.summarizeJobDescription(anyString(), anyList()))
+                .thenReturn(new GeminiJobDescriptionResponse(true, "raw text", "summary text"));
+
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
+                service,
+                "loadJobPostingDraft",
+                JobInputType.IMAGE,
+                jobUrl,
+                null,
+                List.of(image)
+        ));
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(geminiAnalysisClient).summarizeJobDescription(promptCaptor.capture(), anyList());
+        assertThat(promptCaptor.getValue()).contains("URL에서 읽은 자격요건");
+        assertThat(promptCaptor.getValue()).contains("이미지 OCR로 읽은 우대사항");
     }
 
     @Test
@@ -620,6 +757,23 @@ class AnalysisServiceTest {
                 null,
                 null,
                 status,
+                null,
+                null,
+                null,
+                null
+        );
+    }
+
+    private AnalysisService analysisService(
+            JobPostingCrawler jobPostingCrawler,
+            GeminiAnalysisClient geminiAnalysisClient
+    ) {
+        return new AnalysisService(
+                jobPostingCrawler,
+                geminiAnalysisClient,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,

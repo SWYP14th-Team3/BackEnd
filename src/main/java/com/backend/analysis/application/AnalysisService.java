@@ -136,8 +136,8 @@ public class AnalysisService {
             MultipartFile resumeFile,
             List<MultipartFile> jobImages
     ) {
-        validatePdf(resumeFile);
-        validateJobPostingInput(jobInputType, jobUrl, jobText, jobImages);
+        validatePdf(resumeFile); // pdf유효성 검증
+        validateJobPostingInput(jobInputType, jobUrl, jobText, jobImages); // 채용공고 유효성 검증
 
         User user = findUser(userId);
 
@@ -1488,6 +1488,10 @@ public class AnalysisService {
                 - URL/텍스트/OCR/첨부 이미지에서 확인되는 업무내용, 자격요건, 우대사항, 기술스택은 누락하지 마라.
                 - 채용 공고와 무관한 사이트 공통 UI 문구는 제거한다.
                 - 이미지의 경우 글자를 임의로 지어내지 마라. 안 보이면 안 보인다고 하라.
+                - company_name에는 공고 원문에서 확실히 확인되는 회사명을 넣는다. 확인할 수 없으면 null로 둔다.
+                - position_title에는 공고 원문에서 확실히 확인되는 포지션명/직무명을 넣는다. 확인할 수 없으면 null로 둔다.
+                - 회사명과 포지션명은 summary_text에만 쓰지 말고 company_name, position_title 필드에도 반드시 분리해 넣는다.
+                - 채용 플랫폼명이나 URL 도메인만 보고 회사명을 추측하지 마라.
                 - summary_text에는 raw_text를 바탕으로 회사명, 포지션, 주요 업무, 자격요건, 우대사항을 마크다운으로 짧게 정리한다.
                 - summary_text에도 원문에 없는 내용을 지어내지 마라.
 
@@ -1501,9 +1505,9 @@ public class AnalysisService {
                 # 출력
                 JSON 객체 하나만 반환해. 코드블록과 JSON 밖 설명은 쓰지 마.
                 성공 시:
-                { "success": true, "raw_text": "공고 원문 전체 텍스트", "summary_text": "공고 요약 마크다운" }
+                { "success": true, "company_name": "회사명 또는 null", "position_title": "포지션명 또는 null", "raw_text": "공고 원문 전체 텍스트", "summary_text": "공고 요약 마크다운" }
                 실패 시:
-                { "success": false, "raw_text": "", "summary_text": "" }
+                { "success": false, "company_name": null, "position_title": null, "raw_text": "", "summary_text": "" }
 
                 현재 시점: %s
                 채용 플랫폼 추정값: %s

@@ -3,16 +3,18 @@ package com.backend.analysis.dto;
 // Gemini가 채용공고 입력에서 원문 텍스트 확보에 성공했는지와 원문을 반환
 public record GeminiJobDescriptionResponse(
         boolean success,
+        String company_name,
+        String position_title,
         String raw_text,
         String summary_text
 ) {
 
     public String companyName() {
-        return null;
+        return company_name;
     }
 
     public String positionTitle() {
-        return null;
+        return position_title;
     }
 
     public String jobPlatform() {

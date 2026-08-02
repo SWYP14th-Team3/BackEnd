@@ -313,15 +313,17 @@ public class GeminiAnalysisClient {
     }
 
     private Map<String, Object> jobDescriptionResponseSchema() {
-        // 채용공고 원문과 화면 표시용 요약을 반환
+        // 채용공고 원문, 기본 메타 정보, 화면 표시용 요약을 반환
         return Map.of(
                 "type", "OBJECT",
                 "properties", Map.of(
                         "success", Map.of("type", "BOOLEAN"),
+                        "company_name", nullableStringSchema(),
+                        "position_title", nullableStringSchema(),
                         "raw_text", Map.of("type", "STRING"),
                         "summary_text", Map.of("type", "STRING")
                 ),
-                "required", List.of("success", "raw_text", "summary_text")
+                "required", List.of("success", "company_name", "position_title", "raw_text", "summary_text")
         );
     }
 

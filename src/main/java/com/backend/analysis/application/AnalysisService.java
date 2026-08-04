@@ -184,7 +184,7 @@ public class AnalysisService {
 
         GeminiJobDescriptionResponse jobDescriptionResponse = jobPostingDraft.jobDescriptionResponse();
         String platform = jobPostingDraft.platform();
-        String jobPostingRawText = jobDescriptionResponse.jdContent().trim();
+        String jobPostingRawText = jobPostingDraft.jdOriginalText();
         JobDescription jobDescription = jobDescriptionRepository.save(
                 JobDescription.builder()
                         .user(user)
@@ -759,7 +759,11 @@ public class AnalysisService {
                     presentJobImages
             );
             validateJobDescriptionResponse(jobDescriptionResponse);
-            return new JobPostingDraft(platform, jobDescriptionResponse);
+            return new JobPostingDraft(
+                    platform,
+                    jobDescriptionResponse,
+                    defaultIfBlank(inputContent.jdOriginalText(), jobDescriptionResponse.jdContent()).trim()
+            );
         } catch (CustomException e) {
             throw new CustomException(ErrorCode.JOB_POSTING_LOAD_FAILED);
         }
@@ -1069,15 +1073,15 @@ public class AnalysisService {
             boolean hasJobImages
     ) {
         if (jobInputType == JobInputType.TEXT) {
-            return new JobPostingInputContent(null, jobText.trim());
+            return new JobPostingInputContent(null, jobText.trim(), jobText.trim());
         }
 
         if (jobInputType == JobInputType.IMAGE && !hasText(jobUrl)) {
-            return new JobPostingInputContent(null, "");
+            return new JobPostingInputContent(null, "", null);
         }
 
         if (jobInputType == JobInputType.URL && hasText(jobText)) {
-            return new JobPostingInputContent(null, jobText.trim());
+            return new JobPostingInputContent(null, jobText.trim(), jobText.trim());
         }
 
         String crawledText;
@@ -1088,10 +1092,11 @@ public class AnalysisService {
                 throw e;
             }
             log.warn("Failed to crawl job posting URL, continue with fallback input. jobUrl={}", jobUrl);
-            return new JobPostingInputContent(null, defaultIfBlank(jobText, "").trim());
+            String fallbackText = defaultIfBlank(jobText, "").trim();
+            return new JobPostingInputContent(null, fallbackText, fallbackText);
         }
 
-        return new JobPostingInputContent(jobUrl, mergeJobPostingTexts(crawledText, jobText));
+        return new JobPostingInputContent(jobUrl, mergeJobPostingTexts(crawledText, jobText), null);
     }
 
     private String mergeJobPostingTexts(String crawledText, String jobText) {
@@ -1108,7 +1113,8 @@ public class AnalysisService {
 
     private record JobPostingInputContent(
             String jobPostingUrl,
-            String jobPostingText
+            String jobPostingText,
+            String jdOriginalText
     ) {
     }
 
@@ -1968,7 +1974,8 @@ public class AnalysisService {
 
     private record JobPostingDraft(
             String platform,
-            GeminiJobDescriptionResponse jobDescriptionResponse
+            GeminiJobDescriptionResponse jobDescriptionResponse,
+            String jdOriginalText
     ) {
     }
 }

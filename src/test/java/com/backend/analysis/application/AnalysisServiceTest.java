@@ -57,6 +57,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -225,7 +226,6 @@ class AnalysisServiceTest {
         when(analysisResultRepository.save(any(AnalysisResult.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(jobRequirementRepository.save(any(JobRequirement.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(requirementEvaluationRepository.save(any(RequirementEvaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(jobPostingCrawler.extractText(jobUrl)).thenReturn("URL 크롤링 공고 텍스트: Java/Spring 경험 필수");
         when(jobPostingCrawler.extractPlatform(jobUrl)).thenReturn("JOBKOREA");
         when(geminiAnalysisClient.summarizeResume(anyString()))
                 .thenReturn(new GeminiResumeResponse("Spring Boot 기반 REST API 구현 경험", "resume_정리본.md"));
@@ -284,8 +284,9 @@ class AnalysisServiceTest {
 
         ArgumentCaptor<String> jobPromptCaptor = ArgumentCaptor.forClass(String.class);
         verify(geminiAnalysisClient).summarizeJobDescription(jobPromptCaptor.capture(), anyList());
-        assertThat(jobPromptCaptor.getValue()).contains("URL 크롤링 공고 텍스트");
         assertThat(jobPromptCaptor.getValue()).contains("직접 입력 공고 텍스트");
+        assertThat(jobPromptCaptor.getValue()).doesNotContain("URL 크롤링 공고 텍스트");
+        verify(jobPostingCrawler, never()).extractText(jobUrl);
 
         ArgumentCaptor<String> analysisPromptCaptor = ArgumentCaptor.forClass(String.class);
         verify(geminiAnalysisClient).analyze(analysisPromptCaptor.capture());
@@ -500,15 +501,13 @@ class AnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("URL 크롤링이 실패해도 보조 텍스트가 있으면 채용공고 정리를 계속한다")
-    void loadJobPostingDraftContinuesWithJobTextWhenUrlCrawlFails() {
+    @DisplayName("URL 입력에 보조 텍스트가 있으면 크롤링보다 보조 텍스트를 우선한다")
+    void loadJobPostingDraftPrefersJobTextWhenUrlInputHasText() {
         String jobUrl = "https://company.com/jobs/123";
         String fallbackText = "백엔드 개발자 채용 공고입니다. Spring Boot 기반 API 개발과 MySQL 운영 경험을 요구합니다.".repeat(2);
         JobPostingCrawler jobPostingCrawler = mock(JobPostingCrawler.class);
         GeminiAnalysisClient geminiAnalysisClient = mock(GeminiAnalysisClient.class);
         AnalysisService service = analysisService(jobPostingCrawler, geminiAnalysisClient);
-        when(jobPostingCrawler.extractText(jobUrl))
-                .thenThrow(new CustomException(ErrorCode.JOB_POSTING_CRAWL_ERROR));
         when(jobPostingCrawler.extractPlatform(jobUrl)).thenReturn("UNKNOWN");
         when(geminiAnalysisClient.summarizeJobDescription(anyString(), anyList()))
                 .thenReturn(new GeminiJobDescriptionResponse(true, null, null, "raw text", "summary text"));
@@ -526,6 +525,7 @@ class AnalysisServiceTest {
         verify(geminiAnalysisClient).summarizeJobDescription(promptCaptor.capture(), anyList());
         assertThat(promptCaptor.getValue()).contains(fallbackText);
         assertThat(promptCaptor.getValue()).doesNotContain(jobUrl);
+        verify(jobPostingCrawler, never()).extractText(jobUrl);
     }
 
     @Test

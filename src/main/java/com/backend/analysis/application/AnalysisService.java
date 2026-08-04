@@ -1076,6 +1076,10 @@ public class AnalysisService {
             return new JobPostingInputContent(null, "");
         }
 
+        if (jobInputType == JobInputType.URL && hasText(jobText)) {
+            return new JobPostingInputContent(null, jobText.trim());
+        }
+
         String crawledText;
         try {
             crawledText = jobPostingCrawler.extractText(jobUrl.trim());

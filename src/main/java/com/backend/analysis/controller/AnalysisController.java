@@ -87,18 +87,24 @@ public class AnalysisController {
             @RequestPart(name = "jobImages", required = false) List<MultipartFile> jobImages,
             @RequestParam(required = false) JobInputType jobInputType,
             @RequestParam(required = false) String jobUrl,
-            @RequestParam(required = false) String jobText
+            @RequestParam(required = false) String jobText,
+            @RequestParam(required = false) String jobPostingRaw
     ) {
+        String resolvedJobText = hasText(jobText) ? jobText : jobPostingRaw;
         AnalysisDetailResponse response = analysisService.createAnalysis(
                 principal.getUserId(),
                 jobInputType,
                 jobUrl,
-                jobText,
+                resolvedJobText,
                 resumeFile,
                 jobImages
         );
 
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     @PatchMapping("/{analysisResultId}/resume")

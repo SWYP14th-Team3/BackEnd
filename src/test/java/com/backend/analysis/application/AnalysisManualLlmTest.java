@@ -2,19 +2,12 @@ package com.backend.analysis.application;
 
 import com.backend.analysis.client.GeminiAnalysisClient;
 import com.backend.analysis.client.JobPostingCrawler;
-import com.backend.analysis.domain.AnalysisResult;
-import com.backend.analysis.domain.JobDescription;
 import com.backend.analysis.domain.JobInputType;
 import com.backend.analysis.domain.JobRequirement;
-import com.backend.analysis.domain.RequirementEvaluation;
-import com.backend.analysis.domain.UserResume;
 import com.backend.analysis.dto.response.AnalysisDetailResponse;
 import com.backend.analysis.infrastructure.AnalysisResultRepository;
-import com.backend.analysis.infrastructure.JobDescriptionRepository;
-import com.backend.analysis.infrastructure.JobPostingImageRepository;
 import com.backend.analysis.infrastructure.JobRequirementRepository;
 import com.backend.analysis.infrastructure.RequirementEvaluationRepository;
-import com.backend.analysis.infrastructure.UserResumeRepository;
 import com.backend.global.exception.CustomException;
 import com.backend.global.exception.ErrorCode;
 import com.backend.user.domain.Provider;
@@ -22,23 +15,25 @@ import com.backend.user.domain.User;
 import com.backend.user.infrastructure.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.web.multipart.MultipartFile;
-import tools.jackson.databind.ObjectMapper;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
+@SpringBootTest(properties = "spring.jpa.hibernate.ddl-auto=update")
+@ActiveProfiles("local")
 class AnalysisManualLlmTest {
 
     private static final String JOB_URL = "https://www.jobkorea.co.kr/Recruit/GI_Read/49582513?Oem_Code=C1&sc=54&gno=49582513";
@@ -98,14 +93,37 @@ class AnalysisManualLlmTest {
             - 문의사항은 "채용 홈페이지 > 1:1 문의"로 접수해주시기 바랍니다.
             """;
 
+    @Autowired
+    private AnalysisService analysisService;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private AnalysisResultRepository analysisResultRepository;
+
+    @Autowired
+    private JobRequirementRepository jobRequirementRepository;
+
+    @Autowired
+    private RequirementEvaluationRepository requirementEvaluationRepository;
+
+    @Value("${gemini.api-key:}")
+    private String geminiApiKey;
+
     @Test
-    @DisplayName("실제 LLM 분석 요청에서 크롤링 실패 URL의 입력 text를 채용공고 원본 데이터로 반환받는다")
-    @EnabledIfEnvironmentVariable(named = "RUN_LLM_ANALYSIS_TEST", matches = "true")
-    void createAnalysisWithRealLlmReturnsOriginalJobPostingTextWhenUrlCrawlFails() throws IOException {
-        assumeTrue(System.getenv("GEMINI_API_KEY") != null && !System.getenv("GEMINI_API_KEY").isBlank());
+    @DisplayName("실제 LLM 분석 요청 결과를 실제 DB에 저장하고 저장 데이터를 조회한다")
+    void createAnalysisWithRealLlmPersistsResultToDatabaseWhenUrlCrawlFails() throws IOException {
+        assumeTrue(isManualLlmTestEnabled(), "RUN_LLM_ANALYSIS_TEST=true일 때만 실제 LLM/DB 수동 테스트를 실행합니다.");
+        assumeTrue(geminiApiKey != null && !geminiApiKey.isBlank(), "gemini.api-key 설정이 있어야 합니다.");
         assumeTrue(Files.exists(RESUME_PATH), "이력서 PDF 파일이 존재해야 합니다: " + RESUME_PATH);
 
-        AnalysisService service = analysisServiceWithRealGemini();
+        User user = userRepository.save(User.createSocialUser(
+                "manual-test-" + System.currentTimeMillis() + "@example.com",
+                Provider.GOOGLE,
+                "manual-test-" + System.nanoTime(),
+                "수동 테스트 유저"
+        ));
         MockMultipartFile resumeFile = new MockMultipartFile(
                 "resumeFile",
                 RESUME_PATH.getFileName().toString(),
@@ -113,8 +131,8 @@ class AnalysisManualLlmTest {
                 Files.readAllBytes(RESUME_PATH)
         );
 
-        AnalysisDetailResponse response = service.createAnalysis(
-                1L,
+        AnalysisDetailResponse response = analysisService.createAnalysis(
+                user.getId(),
                 JobInputType.URL,
                 JOB_URL,
                 JOB_POSTING_TEXT,
@@ -130,11 +148,24 @@ class AnalysisManualLlmTest {
         assertThat(response.getJobOriginalText()).contains("보안 솔루션(WAF, IPS, EDR, SIEM 등) 운영 또는 정책 관리 경험");
         assertThat(response.getRequirements()).isNotEmpty();
 
-        printManualAnalysisResult(response);
+        assertThat(response.getAnalysisResultId()).isNotNull();
+        assertThat(analysisResultRepository.findById(response.getAnalysisResultId())).isPresent();
+        assertThat(jobRequirementRepository.findAllByAnalysisResultOrderByIdAsc(
+                analysisResultRepository.findById(response.getAnalysisResultId()).orElseThrow()
+        )).isNotEmpty();
+        response.getRequirements().forEach(requirement ->
+                assertThat(requirementEvaluationRepository.findByJobRequirement(
+                        jobRequirementRepository.findById(requirement.getRequirementId()).orElseThrow()
+                )).isPresent()
+        );
+
+        printManualAnalysisResult(user.getId(), response);
     }
 
-    private void printManualAnalysisResult(AnalysisDetailResponse response) {
+    private void printManualAnalysisResult(Long userId, AnalysisDetailResponse response) {
         System.out.println("\n================ LLM 분석 수동 확인 결과 ================");
+        System.out.println("savedUserId       = " + userId);
+        System.out.println("analysisResultId  = " + response.getAnalysisResultId());
         System.out.println("companyName       = " + response.getCompanyName());
         System.out.println("positionTitle     = " + response.getPositionTitle());
         System.out.println("jobInputType      = " + response.getJobInputType());
@@ -164,47 +195,29 @@ class AnalysisManualLlmTest {
         System.out.println("==========================================================\n");
     }
 
-    private AnalysisService analysisServiceWithRealGemini() {
-        JobPostingCrawler jobPostingCrawler = mock(JobPostingCrawler.class);
-        GeminiAnalysisClient geminiAnalysisClient = new GeminiAnalysisClient(
-                new ObjectMapper(),
-                System.getenv("GEMINI_API_KEY"),
-                System.getenv().getOrDefault("GEMINI_MODEL", "gemini-3.1-flash-lite")
-        );
-        UserRepository userRepository = mock(UserRepository.class);
-        UserResumeRepository userResumeRepository = mock(UserResumeRepository.class);
-        JobDescriptionRepository jobDescriptionRepository = mock(JobDescriptionRepository.class);
-        JobPostingImageRepository jobPostingImageRepository = mock(JobPostingImageRepository.class);
-        AnalysisResultRepository analysisResultRepository = mock(AnalysisResultRepository.class);
-        JobRequirementRepository jobRequirementRepository = mock(JobRequirementRepository.class);
-        RequirementEvaluationRepository requirementEvaluationRepository = mock(RequirementEvaluationRepository.class);
+    private boolean isManualLlmTestEnabled() {
+        return "true".equalsIgnoreCase(System.getenv("RUN_LLM_ANALYSIS_TEST"))
+                || "true".equalsIgnoreCase(System.getProperty("RUN_LLM_ANALYSIS_TEST"));
+    }
 
-        when(userRepository.findById(1L)).thenReturn(Optional.of(User.createSocialUser(
-                "manual-test@example.com",
-                Provider.GOOGLE,
-                "manual-test-user",
-                "수동 테스트 유저"
-        )));
-        when(jobPostingCrawler.extractText(JOB_URL))
-                .thenThrow(new CustomException(ErrorCode.JOB_POSTING_CRAWL_ERROR));
-        when(jobPostingCrawler.extractPlatform(JOB_URL)).thenReturn("JOBKOREA");
-        when(userResumeRepository.save(any(UserResume.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(jobDescriptionRepository.save(any(JobDescription.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(jobPostingImageRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(analysisResultRepository.save(any(AnalysisResult.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(jobRequirementRepository.save(any(JobRequirement.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(requirementEvaluationRepository.save(any(RequirementEvaluation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    @TestConfiguration
+    static class ManualLlmTestConfig {
 
-        return new AnalysisService(
-                jobPostingCrawler,
-                geminiAnalysisClient,
-                userRepository,
-                userResumeRepository,
-                jobDescriptionRepository,
-                jobPostingImageRepository,
-                analysisResultRepository,
-                jobRequirementRepository,
-                requirementEvaluationRepository
-        );
+        @Bean
+        @Primary
+        JobPostingCrawler manualTestJobPostingCrawler() {
+            return new JobPostingCrawler() {
+
+                @Override
+                public String extractText(String jobUrl) {
+                    throw new CustomException(ErrorCode.JOB_POSTING_CRAWL_ERROR);
+                }
+
+                @Override
+                public String extractPlatform(String jobUrl) {
+                    return "JOBKOREA";
+                }
+            };
+        }
     }
 }

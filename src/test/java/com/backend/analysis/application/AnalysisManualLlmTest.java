@@ -142,6 +142,7 @@ class AnalysisManualLlmTest {
 
         assertThat(response.getJobInputType()).isEqualTo(JobInputType.URL);
         assertThat(response.getJobUrl()).isEqualTo(JOB_URL);
+        assertThat(response.getJobOriginalText()).isEqualTo(JOB_POSTING_TEXT.trim());
         assertThat(response.getJobOriginalText()).contains("정보보안 담당");
         assertThat(response.getJobOriginalText()).contains("문피아는 네이버웹툰");
         assertThat(response.getJobOriginalText()).contains("IT 운영·정보보안·IT 거버넌스 분야 실무 경험 3년 이상");

@@ -234,7 +234,7 @@ class AnalysisServiceTest {
                         true,
                         "테스트회사",
                         "백엔드 개발자",
-                        "Java/Spring 경험 필수\nREST API 개발 경험 필수",
+                        "LLM이 정리한 공고 원문",
                         "공고 요약: 백엔드 개발자"
                 ));
         when(geminiAnalysisClient.analyze(anyString()))
@@ -269,7 +269,9 @@ class AnalysisServiceTest {
         assertThat(response.getJobInputType()).isEqualTo(JobInputType.URL);
         assertThat(response.getJobUrl()).isEqualTo(jobUrl);
         assertThat(response.getJobPlatform()).isEqualTo("JOBKOREA");
-        assertThat(response.getJobOriginalText()).contains("Java/Spring 경험 필수");
+        assertThat(response.getJobOriginalText()).isEqualTo(jobText.trim());
+        assertThat(response.getJobOriginalText()).contains("직접 입력 공고 텍스트");
+        assertThat(response.getJobOriginalText()).doesNotContain("LLM이 정리한 공고 원문");
         assertThat(response.getJobSummaryText()).contains("공고 요약");
         assertThat(response.getResumeCurrentText()).contains("Spring Boot 기반 REST API 구현 경험");
         assertThat(response.getCompanyName()).isEqualTo("테스트회사");

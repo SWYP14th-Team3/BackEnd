@@ -1,16 +1,17 @@
 ## Summary
 
-- 채용공고 URL/TEXT 입력 시 이미지도 함께 Gemini 분석에 전달되도록 변경했습니다.
-- 첨부된 채용공고 이미지 전체를 Gemini `inline_data`로 전달하도록 확장했습니다.
-- 채용공고 이미지는 최대 10장까지만 허용하고, 10장 초과 시 예외가 발생하도록 검증을 추가했습니다.
-- URL 텍스트와 이미지 OCR 내용을 모두 합쳐 원본 공고 텍스트에 반영하도록 프롬프트를 보강했습니다.
+- URL과 채용공고 text가 함께 입력되면 사용자가 입력한 text를 우선 분석하도록 변경했습니다.
+- 잡코리아 등 크롤링 결과가 요약/모집요강 텍스트로 들어와도 직접 입력한 공고 원문이 `jd_original_text`에 저장되도록 했습니다.
+- 실제 LLM 수동 테스트가 Spring context와 실제 DB repository를 사용해 저장 여부를 확인하도록 보강했습니다.
 
 ## Test
 
-- [x] `./gradlew test`
+- [x] `./gradlew test --tests com.backend.analysis.application.AnalysisServiceTest`
+- [x] `RUN_LLM_ANALYSIS_TEST=true ./gradlew --no-daemon test --tests com.backend.analysis.application.AnalysisManualLlmTest --rerun-tasks`
 - [ ] API 동작 확인
 
 ## Note
 
-- 직접 동작 확인 시 `jobImages` 필드명으로 이미지 파일을 함께 전송해야 합니다.
+- URL과 채용공고 text를 함께 보내면 크롤링 결과보다 text 입력값이 우선됩니다.
+- 수동 LLM 테스트는 `RUN_LLM_ANALYSIS_TEST=true`와 `gemini.api-key` 설정이 있을 때만 실제 분석/DB 저장을 수행합니다.
 - `.DS_Store` 미추적 파일은 PR 변경 범위에 포함하지 않았습니다.

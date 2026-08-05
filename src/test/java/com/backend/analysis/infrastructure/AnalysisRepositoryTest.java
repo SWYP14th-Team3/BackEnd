@@ -1,7 +1,5 @@
 package com.backend.analysis.infrastructure;
 
-import com.backend.global.config.JpaAuditingConfig;
-import org.springframework.context.annotation.Import;
 import com.backend.analysis.domain.AnalysisResult;
 import com.backend.analysis.domain.JobDescription;
 import com.backend.analysis.domain.JobRequirement;
@@ -13,17 +11,23 @@ import com.backend.analysis.domain.UserResume;
 import com.backend.user.domain.Provider;
 import com.backend.user.domain.User;
 import com.backend.user.infrastructure.UserRepository;
+import com.backend.global.config.JpaAuditingConfig;
 import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.Base64;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,6 +37,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(JpaAuditingConfig.class)
 class AnalysisRepositoryTest {
+
+    private static final String RESUME_CONTENT_ENCRYPTION_KEY_PROPERTY = "resume.content.encryption.key";
+
+    @BeforeAll
+    static void setResumeContentEncryptionKey() {
+        byte[] key = "12345678901234567890123456789012".getBytes(StandardCharsets.UTF_8);
+        System.setProperty(RESUME_CONTENT_ENCRYPTION_KEY_PROPERTY, Base64.getEncoder().encodeToString(key));
+    }
+
+    @AfterAll
+    static void clearResumeContentEncryptionKey() {
+        System.clearProperty(RESUME_CONTENT_ENCRYPTION_KEY_PROPERTY);
+    }
 
     @Autowired
     private UserRepository userRepository;

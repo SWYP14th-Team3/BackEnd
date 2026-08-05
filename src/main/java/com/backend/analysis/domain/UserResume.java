@@ -25,6 +25,7 @@ public class UserResume extends BaseTimeEntity {
     private User user;
 
     @Lob
+    @Convert(converter = ResumeContentEncryptConverter.class)
     @Column(name = "resume_content", nullable = false, columnDefinition = "TEXT")
     private String resumeContent;
 

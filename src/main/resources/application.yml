@@ -89,6 +89,11 @@ gemini:
   api-key: ${GEMINI_API_KEY}
   model: ${GEMINI_MODEL:gemini-3.1-flash-lite}
 
+resume:
+  content:
+    encryption:
+      migrate-legacy: ${RESUME_CONTENT_ENCRYPTION_MIGRATE_LEGACY:false}
+
 ---
 spring:
   config:
@@ -137,3 +142,8 @@ oauth:
 gemini:
   api-key: ${GEMINI_API_KEY}
   model: ${GEMINI_MODEL:gemini-3.1-flash-lite}
+
+resume:
+  content:
+    encryption:
+      migrate-legacy: ${RESUME_CONTENT_ENCRYPTION_MIGRATE_LEGACY:false}

@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.multipart.MultipartFile;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
@@ -188,10 +189,17 @@ public class GeminiAnalysisClient {
             String jsonText = extractJsonText(rawResponse);
             return jsonParser.parse(jsonText);
         } catch (JacksonException e) {
-            log.warn("Failed to parse Gemini response: {}", e.getMessage(), e);
+            log.warn("Failed to parse Gemini response. exceptionType={}", e.getClass().getSimpleName());
             throw new CustomException(ErrorCode.GEMINI_RESPONSE_PARSE_ERROR);
+        } catch (RestClientResponseException e) {
+            log.warn(
+                    "Gemini API request failed. status={}, exceptionType={}",
+                    e.getStatusCode(),
+                    e.getClass().getSimpleName()
+            );
+            throw new CustomException(ErrorCode.GEMINI_API_ERROR);
         } catch (Exception e) {
-            log.warn("Gemini API request failed: {}", e.getMessage(), e);
+            log.warn("Gemini API request failed. exceptionType={}", e.getClass().getSimpleName());
             throw new CustomException(ErrorCode.GEMINI_API_ERROR);
         }
     }

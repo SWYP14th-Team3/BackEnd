@@ -38,6 +38,7 @@ public class RequirementEvaluation {
     private String displayTitle;
 
     @Lob
+    @Convert(converter = ResumeEvidenceEncryptConverter.class)
     @Column(name = "resume_evidence", columnDefinition = "TEXT")
     private String resumeEvidence;
 

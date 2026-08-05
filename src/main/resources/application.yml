@@ -73,7 +73,7 @@ logging:
   level:
     com.backend: DEBUG
     org.hibernate.SQL: DEBUG
-    org.hibernate.orm.jdbc.bind: TRACE
+    org.hibernate.orm.jdbc.bind: OFF
 
 oauth:
   google:
@@ -93,6 +93,9 @@ resume:
   content:
     encryption:
       migrate-legacy: ${RESUME_CONTENT_ENCRYPTION_MIGRATE_LEGACY:false}
+  evidence:
+    encryption:
+      migrate-legacy: ${RESUME_EVIDENCE_ENCRYPTION_MIGRATE_LEGACY:false}
 
 ---
 spring:
@@ -128,6 +131,7 @@ logging:
   level:
     com.backend: INFO
     org.hibernate.SQL: INFO
+    org.hibernate.orm.jdbc.bind: OFF
 
 oauth:
   google:
@@ -147,3 +151,6 @@ resume:
   content:
     encryption:
       migrate-legacy: ${RESUME_CONTENT_ENCRYPTION_MIGRATE_LEGACY:false}
+  evidence:
+    encryption:
+      migrate-legacy: ${RESUME_EVIDENCE_ENCRYPTION_MIGRATE_LEGACY:false}
